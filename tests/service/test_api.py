@@ -648,6 +648,46 @@ class TestBotLifecycle:
         assert response.status_code == 200
         assert response.json()["per_bot_cap"] == 25.0
 
+    def test_demo_strategy_cannot_be_created_live(self, client: TestClient) -> None:
+        """A demo strategy has no risk management; arming one is never meant (#119)."""
+        response = client.post(
+            "/api/bots",
+            json={
+                "venue": "coinbase",
+                "market_type": "spot",
+                "strategy": "demo-crossover",
+                "symbol": "BTC/USD",
+                "timeframe": "1m",
+                "quantity": 0.1,
+                "per_bot_cap": 1_000.0,
+                "global_cap": 10_000.0,
+                "params": {},
+                "live": True,
+            },
+            headers=_auth(),
+        )
+
+        assert response.status_code == 400
+        assert "demonstration strategy" in response.json()["detail"]
+
+    def test_demo_strategy_cannot_be_patched_live(self, client: TestClient) -> None:
+        """Blocked on the update path too, as with the paper venue (#119)."""
+        bot = self._create(client, strategy="demo-crossover")
+
+        response = client.patch(
+            f"/api/bots/{bot['id']}", json={"live": True}, headers=_auth()
+        )
+
+        assert response.status_code == 400
+        assert "demonstration strategy" in response.json()["detail"]
+
+    def test_demo_strategy_is_fine_in_dry_run(self, client: TestClient) -> None:
+        """The block is on arming, not on using the demo at all."""
+        bot = self._create(client, strategy="demo-crossover")
+
+        assert bot["strategy"] == "demo-crossover"
+        assert bot["live"] is False
+
     def test_venue_listing_reports_paper_as_not_live_capable(
         self, client: TestClient
     ) -> None:

@@ -13,6 +13,7 @@ from .base import DataRequirements, MarketData, Strategy, StrategyContext
 from .registry import (
     available_strategies,
     build_strategy,
+    is_demo_strategy,
     strategy,
     strategy_data_requirements,
     strategy_requirements,
@@ -36,6 +37,7 @@ __all__ = [
     "StrategyContext",
     "available_strategies",
     "build_strategy",
+    "is_demo_strategy",
     "strategy",
     "strategy_data_requirements",
     "strategy_requirements",

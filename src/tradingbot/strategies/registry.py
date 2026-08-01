@@ -119,6 +119,23 @@ def strategy_data_requirements(name: str) -> DataRequirements:
     return DataRequirements()
 
 
+def is_demo_strategy(name: str) -> bool:
+    """Return whether the strategy registered under ``name`` is demo-only (#119).
+
+    A demo strategy exists so the plumbing can be watched end to end; it has no
+    risk management and no reason to be pointed at money. The marker lives on
+    the class rather than on a name check so renaming the strategy cannot
+    quietly unblock it.
+
+    Args:
+        name: Registered strategy name.
+
+    Returns:
+        True when the strategy declares ``demo_only``.
+    """
+    return getattr(_candidates.get(name.strip()), "demo_only", False) is True
+
+
 def available_strategies() -> list[str]:
     """Return all registered strategy names in alphabetical order."""
     return sorted(_factories)

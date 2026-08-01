@@ -24,7 +24,7 @@ from fastapi.websockets import WebSocket, WebSocketDisconnect
 
 from ..models import Position
 from ..stream import StreamingNotSupported
-from ..strategies import strategy_requirements
+from ..strategies import is_demo_strategy, strategy_requirements
 from ..venues.capabilities import CapabilityError, check_strategy
 from ..venues.contracts import ContractMetadataError
 from .audit import AuditLog
@@ -175,6 +175,30 @@ def _require_live_capable(venue: str, market_type: str) -> None:
                 "holds no credentials, so its positions and profits exist only "
                 "in this application. Create a bot on a real venue with valid "
                 "credentials to trade live."
+            ),
+        )
+
+
+def _require_not_demo_strategy(name: str) -> None:
+    """Refuse LIVE for a demonstration strategy (#119).
+
+    A demo strategy exists so the plumbing can be watched end to end. It has no
+    risk management, no position sizing and no regard for cost, so arming one
+    is never intentional.
+
+    Args:
+        name: Registered strategy name.
+
+    Raises:
+        HTTPException: 400 if the strategy declares itself demo-only.
+    """
+    if is_demo_strategy(name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Strategy {name!r} is a demonstration strategy and cannot be "
+                "run LIVE. It has no risk management and exists only to show "
+                "signal routing, order events and PnL working end to end."
             ),
         )
 
@@ -771,6 +795,7 @@ def create_app(
             )
             if request.live:
                 _require_live_capable(request.venue, request.market_type)
+                _require_not_demo_strategy(request.strategy)
         except (ValueError, CapabilityError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
@@ -899,6 +924,7 @@ def create_app(
             # failed -- the operator would believe real money was at risk, or
             # worse, that it was making the profits paper reports.
             _require_live_capable(bot.config.venue, bot.config.market_type)
+            _require_not_demo_strategy(bot.config.strategy)
         if request.live is not None:
             bot.config.live = request.live
         if request.per_bot_cap is not None:
