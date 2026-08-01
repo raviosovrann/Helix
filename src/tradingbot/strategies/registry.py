@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast
 
-from .base import Strategy, StrategyContext
+from .base import DataRequirements, Strategy, StrategyContext
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard
     from ..venues.capabilities import StrategyRequirements
@@ -97,6 +97,26 @@ def strategy_requirements(name: str) -> "StrategyRequirements":
     if isinstance(declared, StrategyRequirements):
         return declared
     return StrategyRequirements()
+
+
+def strategy_data_requirements(name: str) -> DataRequirements:
+    """Return the history the strategy registered under ``name`` needs (#130).
+
+    Opt-in like ``strategy_requirements``: a strategy reading only the candles
+    handed to ``on_bar`` declares nothing and gets the empty default, so no
+    existing strategy has to change.
+
+    Args:
+        name: Registered strategy name.
+
+    Returns:
+        The strategy's declared history requirements, or the empty default.
+    """
+    candidate = _candidates.get(name.strip())
+    declared = getattr(candidate, "data_requirements", None)
+    if isinstance(declared, DataRequirements):
+        return declared
+    return DataRequirements()
 
 
 def available_strategies() -> list[str]:

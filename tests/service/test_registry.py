@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 import tradingbot.service.registry as registry
+from doubles import EmptyMarketData
 from tradingbot.service.registry import (
     available_strategies,
     available_venues,
@@ -21,7 +22,7 @@ def _context() -> StrategyContext:
         symbol="BTC/USD",
         timeframe="1m",
         quantity=0.1,
-        data_feed=None,
+        market_data=EmptyMarketData(),
         params={},
     )
 

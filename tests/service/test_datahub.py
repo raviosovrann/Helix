@@ -91,6 +91,76 @@ async def test_warmup_deduped_and_cached() -> None:
     assert first == second
 
 
+class _DepthFeed:
+    """Candle feed whose response length reflects the requested depth.
+
+    ``_FakeCandleFeed`` always returns a single candle, so it cannot show
+    whether the hub honoured ``limit``. Timestamps ascend to the newest, which
+    is what lets a slice be checked for *which* candles came back, not just how
+    many.
+    """
+
+    def __init__(self) -> None:
+        self.limits: list[int] = []
+
+    def warmup_candles(self, symbol: str, timeframe: str, limit: int) -> list[Candle]:
+        del symbol, timeframe
+        self.limits.append(limit)
+        return [_c(i) for i in range(1, limit + 1)]
+
+    def latest_closed_candle(self, symbol: str, timeframe: str) -> Candle:
+        del symbol, timeframe
+        return _c(1)
+
+
+def _depth_hub(feed: _DepthFeed) -> MarketDataHub:
+    return MarketDataHub(
+        stream_feed=_FakeStream(),
+        candle_feed=feed,
+        limiter=RateLimiter(1000, 1000),
+        mtf_cache_seconds=60.0,
+        clock=lambda: 0.0,
+    )
+
+
+@pytest.mark.asyncio
+async def test_warmup_deeper_request_refetches_at_the_greater_depth() -> None:
+    """A shallow cached entry must not cap a later, deeper request (#130).
+
+    Caching on ``(symbol, timeframe)`` alone let a 20-candle warmup poison a
+    200-candle one: the second caller silently received 20 rows and a strategy
+    needing 200 bars of history evaluated on a tenth of it.
+    """
+    feed = _DepthFeed()
+    hub = _depth_hub(feed)
+
+    shallow = await hub.warmup("BTC/USD", "1h", 20)
+    deep = await hub.warmup("BTC/USD", "1h", 200)
+
+    assert len(shallow) == 20
+    assert len(deep) == 200
+    assert feed.limits == [20, 200]
+
+
+@pytest.mark.asyncio
+async def test_warmup_shallower_request_slices_the_newest_from_cache() -> None:
+    """A deep cached entry serves a shallower request without refetching (#130).
+
+    The caller asked for the newest 20, so it must receive exactly those --
+    returning all 200 hands a strategy more history than it sized itself for.
+    """
+    feed = _DepthFeed()
+    hub = _depth_hub(feed)
+
+    await hub.warmup("BTC/USD", "1h", 200)
+    shallow = await hub.warmup("BTC/USD", "1h", 20)
+
+    assert feed.limits == [200], "a cached deeper fetch already contains these candles"
+    assert len(shallow) == 20
+    # Newest, not oldest: candle 200 is the most recent bar.
+    assert [candle.timestamp for candle in shallow] == list(range(181, 201))
+
+
 @pytest.mark.asyncio
 async def test_identical_subscribers_share_stream_and_fan_out_candles() -> None:
     """Verify that identical subscribers share a stream and receive fanned-out candles."""

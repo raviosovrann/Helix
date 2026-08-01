@@ -15,7 +15,8 @@ from ..venues.capabilities import check_strategy
 from ..venues.contracts import ContractMetadataError, ContractSpec, spot_spec
 from ..strategies import strategy_requirements
 from ..runtime import StreamRuntime
-from ..strategies import StrategyContext
+from ..strategies import DataRequirements, StrategyContext, strategy_data_requirements
+from .strategy_data import HubMarketData
 from ..stream import StreamingFeed
 from .blocking import BlockingCalls, BlockingCallTimeout, WorkerPools
 from .events import BotStateEvent, DecisionEvent, EventBus, OrderEvent
@@ -130,6 +131,16 @@ class BotInstance:
 
     hub: Any | None = None
     """Market-data hub, retained after start for mark-to-market pricing."""
+
+    market_data: HubMarketData | None = None
+    """The strategy's synchronous view of prefetched history (#130).
+
+    Retained so the poll tick can refresh declared timeframes: a higher
+    timeframe would otherwise stay frozen at whatever was fetched at start.
+    """
+
+    data_requirements: DataRequirements | None = None
+    """History the running strategy declared, refreshed on the poll tick."""
 
     multiplier: float = 1.0
     """Contract multiplier used when marking PnL (1.0 for spot)."""
@@ -439,13 +450,21 @@ class BotSupervisor:
                 ),
                 capabilities=capabilities,
             )
+            # Prefetch every timeframe the strategy declared before it is built,
+            # so its first evaluation reads a populated snapshot. Strategies run
+            # on a worker lane with no event loop, so this is the only place the
+            # fetch can happen (#130).
+            market_data = HubMarketData(hub, symbol=bot.config.symbol)
+            bot.market_data = market_data
+            bot.data_requirements = strategy_data_requirements(bot.config.strategy)
+            await market_data.prefetch(bot.data_requirements)
             strategy = build_strategy(
                 bot.config.strategy,
                 StrategyContext(
                     symbol=bot.config.symbol,
                     timeframe=bot.config.timeframe,
                     quantity=bot.config.quantity,
-                    data_feed=hub,
+                    market_data=market_data,
                     params=bot.config.params,
                 ),
             )
@@ -632,6 +651,11 @@ class BotSupervisor:
                 await self._venue_workers(bot).run(self._refresh_position, bot)
                 self._refresh_pnl(bot)
                 self._publish_state_if_changed(bot)
+                # A higher timeframe goes stale while the bot's own timeframe
+                # keeps streaming, so declared history is refreshed here. The
+                # hub owns the caching, so this is cheap when nothing expired.
+                if bot.market_data is not None and bot.data_requirements is not None:
+                    await bot.market_data.prefetch(bot.data_requirements)
             except BlockingCallTimeout:
                 _log.warning("position refresh timed out for bot %s", bot.config.id)
             except Exception:  # noqa: BLE001 - a bad poll must not stop the bot
