@@ -91,6 +91,10 @@ export interface VenueOption {
   // form can describe a choice rather than offering one the API will refuse.
   supports_short: boolean
   supports_reduce_only: boolean
+  // Whether this venue can ever execute with real money (#116). False for the
+  // paper venue, which simulates its fills — the wizard reads this to disable
+  // the LIVE toggle rather than offering a mode the API will refuse.
+  supports_live: boolean
   order_types: string[]
 }
 

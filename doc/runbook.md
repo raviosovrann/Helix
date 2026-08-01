@@ -111,6 +111,36 @@ For the supported container deployment see [deployment.md](deployment.md).
 
 ## 4. Operating bots
 
+### 4.0 Three ways an order can be "not real" — know which one you are in
+
+These are routinely confused, and the difference is what stands between a demo
+and a funded account. Three distinct things (#116):
+
+| | Market data | Orders go to | Needs credentials | Can lose money |
+|---|---|---|---|---|
+| **Paper venue** (`paper/spot`) | Real, live, public Coinbase | Nowhere — filled in memory | No | No |
+| **Dry-run on a real venue** (`live=false`) | Real, via your account | Nowhere — logged, then dropped | Yes | No |
+| **Exchange sandbox** | The exchange's test market | The exchange's test book | Yes (sandbox keys) | No |
+| **LIVE** (`live=true`) | Real, via your account | The real order book | Yes | **Yes** |
+
+- **Paper** is the credential-free demo path. Prices are genuine, so signal
+  timing is genuine; only the fills are simulated. It is the only mode that
+  needs nothing secret, and it **cannot be armed** — the API refuses `live=true`
+  on it at create and at update, and the venue builder refuses to construct a
+  live one. Its positions and PnL exist only in this console.
+- **Dry-run on a real venue** still authenticates and still reads *your*
+  account's market data and positions. It is the last check before arming, and
+  it is not credential-free.
+- **Exchange sandbox** is the venue's own test environment, reached by pointing
+  credentials at a sandbox endpoint. Tradovate's demo is this; see §4.x once
+  #123 separates broker environment from execution mode.
+- **LIVE** sends real orders. Everything in §4.3 applies.
+
+A paper bot is not evidence that a live bot will work: it proves the strategy,
+the routing, the ledger and the UI, but nothing about authentication, symbol
+formats, venue rejections or fill behaviour. Promote paper → dry-run on the real
+venue → LIVE, in that order.
+
 All of this is available in the UI after signing in:
 
 1. **Create** — *New bot* wizard: pick venue + market type, strategy, symbol,

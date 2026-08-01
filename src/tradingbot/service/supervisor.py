@@ -426,6 +426,15 @@ class BotSupervisor:
                 strategy_requirements(bot.config.strategy),
                 capabilities,
             )
+            # The paper venue fills at the live mark but is built from
+            # credentials alone, so it has no way to reach the hub itself
+            # (#116). Detected rather than required, like contract_spec and
+            # owned_qty, so it stays an ordinary ExecutionVenue.
+            attach_price = getattr(venue, "set_price_source", None)
+            if callable(attach_price):
+                attach_price(
+                    lambda: hub.latest_price(bot.config.symbol, bot.config.timeframe)
+                )
             spec = self._resolve_contract(bot, venue)
             multiplier = spec.contract_size
             bot.venue = venue

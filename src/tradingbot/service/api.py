@@ -151,6 +151,34 @@ def _unauthorized() -> HTTPException:
     )
 
 
+def _require_live_capable(venue: str, market_type: str) -> None:
+    """Refuse LIVE on a venue that cannot execute with real money (#116).
+
+    Args:
+        venue: Venue identifier.
+        market_type: Market type identifier.
+
+    Raises:
+        HTTPException: 400 if the venue declares ``supports_live=False``.
+    """
+    try:
+        capabilities = venue_capabilities(venue, market_type)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    if not capabilities.supports_live:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{venue}/{market_type} cannot run LIVE: it simulates fills and "
+                "holds no credentials, so its positions and profits exist only "
+                "in this application. Create a bot on a real venue with valid "
+                "credentials to trade live."
+            ),
+        )
+
+
 def _resolve_cookie_principal(
     request: Request, store: BotStore, sessions: SessionStore
 ) -> Principal | None:
@@ -741,6 +769,8 @@ def create_app(
                 strategy_requirements(request.strategy),
                 capabilities,
             )
+            if request.live:
+                _require_live_capable(request.venue, request.market_type)
         except (ValueError, CapabilityError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
@@ -862,6 +892,13 @@ def create_app(
             "per_bot_cap": bot.config.per_bot_cap,
             "global_cap": bot.config.global_cap,
         }
+        if request.live:
+            # A simulated venue can never be armed (#116). Checked here as well
+            # as in the venue builder because a bot patched live would look
+            # armed in the UI and the audit log until the next start attempt
+            # failed -- the operator would believe real money was at risk, or
+            # worse, that it was making the profits paper reports.
+            _require_live_capable(bot.config.venue, bot.config.market_type)
         if request.live is not None:
             bot.config.live = request.live
         if request.per_bot_cap is not None:

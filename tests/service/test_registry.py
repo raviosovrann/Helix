@@ -14,6 +14,7 @@ from tradingbot.service.registry import (
 )
 from tradingbot.strategies import StrategyContext
 from tradingbot.venues.ccxt import CcxtVenue
+from tradingbot.venues.paper import PaperVenue
 from tradingbot.venues.tradovate import TradovateVenue
 
 
@@ -141,8 +142,49 @@ def test_available_venues_lists_supported_mappings() -> None:
     ] == [
         ("coinbase", "futures"),
         ("coinbase", "spot"),
+        ("paper", "spot"),
         ("tradovate", "futures"),
     ]
+
+
+def test_paper_venue_builds_without_any_credentials() -> None:
+    """The gap #116 exists to close: a dry-run bot needed exchange keys.
+
+    ``_ccxt_builder`` refuses a missing api_key/api_secret even when
+    ``live=False``, so a new operator could not start a dry-run bot at all.
+    """
+    venue = build_venue("paper", "spot", creds={}, live=False)
+
+    assert isinstance(venue, PaperVenue)
+
+
+def test_paper_venue_cannot_be_promoted_to_live() -> None:
+    """Paper must be impossible to arm (#116).
+
+    It simulates fills and holds no credentials, so a LIVE paper bot would
+    report profits and positions that no exchange has any record of. Refusing
+    at construction means no configuration, stored or hand-edited, can produce
+    one.
+    """
+    with pytest.raises(ValueError, match="cannot be run LIVE"):
+        build_venue("paper", "spot", creds={}, live=True)
+
+
+def test_paper_venue_ignores_any_credentials_it_is_given() -> None:
+    """A stray stored credential must not turn paper into a real venue."""
+    venue = build_venue(
+        "paper", "spot", creds={"api_key": "k", "api_secret": "s"}, live=False
+    )
+
+    assert isinstance(venue, PaperVenue)
+
+
+def test_paper_venue_is_spot_and_long_only() -> None:
+    """Capabilities must be declared, so #125's checks apply to paper too."""
+    caps = registry.venue_capabilities("paper", "spot")
+
+    assert caps.supports_short is False
+    assert caps.supports_reduce_only is False
 
 
 def test_available_venues_is_sorted_independently_of_mapping_order(monkeypatch) -> None:

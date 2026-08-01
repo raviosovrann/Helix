@@ -13,6 +13,11 @@ interface CredField {
 
 // Which credential fields to collect per venue (stored via PUT secrets).
 const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
+  // Paper needs none, and that is the point of it (#116): the demo path exists
+  // so an operator can watch a bot trade before handing over any exchange key.
+  // Listed explicitly rather than left to the fallback below, which would have
+  // demanded Coinbase keys for a venue that authenticates nothing.
+  paper: [],
   coinbase: [
     { name: 'api_key', label: 'API key' },
     { name: 'api_secret', label: 'API secret' },
@@ -89,6 +94,9 @@ export function NewBot() {
   }
 
   const credFields = credFieldsFor(venue)
+  // Default to allowing LIVE while the venue list is still loading: absent
+  // capabilities must not silently present a real venue as simulated.
+  const liveCapable = selectedVenue?.supports_live ?? true
   const step3Valid =
     symbol.trim() !== '' &&
     Number(quantity) > 0 &&
@@ -218,9 +226,16 @@ export function NewBot() {
             />
 
             <h2>{venue} credentials</h2>
-            <p className="muted">
-              Stored server-side, encrypted at rest — sent once, never shown again.
-            </p>
+            {credFields.length === 0 ? (
+              <p className="muted" data-testid="no-credentials-needed">
+                None needed. {venue} simulates its fills and never contacts an exchange account, so
+                it watches live prices without any API key.
+              </p>
+            ) : (
+              <p className="muted">
+                Stored server-side, encrypted at rest — sent once, never shown again.
+              </p>
+            )}
             {credFields.map((f) => (
               <div key={f.name}>
                 <label htmlFor={`cred-${f.name}`}>
@@ -267,10 +282,18 @@ export function NewBot() {
                 id="live"
                 type="checkbox"
                 checked={live}
+                disabled={!liveCapable}
                 onChange={(e) => onLiveToggle(e.target.checked)}
               />
               <label htmlFor="live">Enable LIVE trading (default is dry-run)</label>
             </div>
+            {!liveCapable && (
+              <p className="muted" data-testid="live-unavailable">
+                {venue} cannot trade live: its fills are simulated, so any profit or position it
+                reports exists only in this console. Create a bot on a funded venue to trade for
+                real.
+              </p>
+            )}
             {error && (
               <p role="alert" className="error">
                 {error}

@@ -16,6 +16,7 @@ const VENUES: VenueOption[] = [
     market_type: 'spot',
     supports_short: false,
     supports_reduce_only: false,
+    supports_live: true,
     order_types: ORDER_TYPES,
   },
   {
@@ -23,6 +24,15 @@ const VENUES: VenueOption[] = [
     market_type: 'futures',
     supports_short: true,
     supports_reduce_only: true,
+    supports_live: true,
+    order_types: ORDER_TYPES,
+  },
+  {
+    venue: 'paper',
+    market_type: 'spot',
+    supports_short: false,
+    supports_reduce_only: false,
+    supports_live: false,
     order_types: ORDER_TYPES,
   },
   {
@@ -30,6 +40,7 @@ const VENUES: VenueOption[] = [
     market_type: 'futures',
     supports_short: true,
     supports_reduce_only: true,
+    supports_live: true,
     order_types: ORDER_TYPES,
   },
 ]
@@ -102,6 +113,53 @@ describe('NewBot wizard', () => {
     // switch to tradovate → futures only (spot no longer offered)
     await userEvent.selectOptions(screen.getByLabelText(/venue/i), 'tradovate')
     expect(Array.from(market().options).map((o) => o.value)).toEqual(['futures'])
+  })
+
+  it('creates a paper bot without asking for any credentials (#116)', async () => {
+    const { client } = setup()
+    await screen.findByLabelText(/venue/i)
+    await userEvent.selectOptions(screen.getByLabelText(/venue/i), 'paper')
+    await next()
+    await next()
+    // Step 3: symbol and quantity only — no key fields to fill.
+    await userEvent.type(screen.getByLabelText(/symbol/i), 'BTC/USD')
+    expect(screen.getByTestId('no-credentials-needed')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^API key/i)).not.toBeInTheDocument()
+    // Next is enabled with no credentials entered, which is the whole point.
+    await next()
+    await userEvent.click(screen.getByRole('button', { name: /create/i }))
+
+    expect(client.putSecrets).not.toHaveBeenCalled()
+    expect(client.createBot).toHaveBeenCalledWith(
+      expect.objectContaining({ venue: 'paper', live: false }),
+    )
+  })
+
+  it('will not let a paper bot be armed LIVE (#116)', async () => {
+    setup()
+    await screen.findByLabelText(/venue/i)
+    await userEvent.selectOptions(screen.getByLabelText(/venue/i), 'paper')
+    await next()
+    await next()
+    await userEvent.type(screen.getByLabelText(/symbol/i), 'BTC/USD')
+    await next()
+
+    expect(screen.getByLabelText(/enable live trading/i)).toBeDisabled()
+    expect(screen.getByTestId('live-unavailable')).toBeInTheDocument()
+  })
+
+  it('still offers LIVE on a venue that can actually trade', async () => {
+    setup()
+    await screen.findByLabelText(/venue/i)
+    await next()
+    await next()
+    await userEvent.type(screen.getByLabelText(/symbol/i), 'BTC/USD')
+    await userEvent.type(screen.getByLabelText(/^API key/i), 'k')
+    await userEvent.type(screen.getByLabelText(/API secret/i), 's')
+    await next()
+
+    expect(screen.getByLabelText(/enable live trading/i)).toBeEnabled()
+    expect(screen.queryByTestId('live-unavailable')).not.toBeInTheDocument()
   })
 
   it('blocks Next on step 3 until required fields are filled', async () => {

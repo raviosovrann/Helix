@@ -592,6 +592,75 @@ class TestBotLifecycle:
         assert bot["live"] is False
         assert bot["status"] == "created"
 
+    def test_paper_bot_is_created_without_any_credentials(self, client: TestClient) -> None:
+        """The whole point of #116: a demo bot needs no exchange keys."""
+        bot = self._create(client, venue="paper", market_type="spot")
+
+        assert bot["venue"] == "paper"
+        assert bot["live"] is False
+
+    def test_paper_bot_cannot_be_created_live(self, client: TestClient) -> None:
+        """A simulated venue must be impossible to arm (#116)."""
+        response = client.post(
+            "/api/bots",
+            json={
+                "venue": "paper",
+                "market_type": "spot",
+                "strategy": "example",
+                "symbol": "BTC/USD",
+                "timeframe": "1m",
+                "quantity": 0.1,
+                "per_bot_cap": 1_000.0,
+                "global_cap": 10_000.0,
+                "params": {},
+                "live": True,
+            },
+            headers=_auth(),
+        )
+
+        assert response.status_code == 400
+        assert "cannot run LIVE" in response.json()["detail"]
+
+    def test_paper_bot_cannot_be_patched_live(self, client: TestClient) -> None:
+        """Blocked on the update path too, not only at create (#116).
+
+        A bot patched live would read as armed in the UI and the audit log
+        until the next start attempt failed -- so the operator would believe
+        real money was at risk, or that paper's simulated profits were real.
+        """
+        bot = self._create(client, venue="paper", market_type="spot")
+
+        response = client.patch(
+            f"/api/bots/{bot['id']}", json={"live": True}, headers=_auth()
+        )
+
+        assert response.status_code == 400
+        assert "cannot run LIVE" in response.json()["detail"]
+
+    def test_paper_bot_can_still_be_patched_for_caps(self, client: TestClient) -> None:
+        """The guard is about arming, not about editing a paper bot at all."""
+        bot = self._create(client, venue="paper", market_type="spot")
+
+        response = client.patch(
+            f"/api/bots/{bot['id']}", json={"per_bot_cap": 25.0}, headers=_auth()
+        )
+
+        assert response.status_code == 200
+        assert response.json()["per_bot_cap"] == 25.0
+
+    def test_venue_listing_reports_paper_as_not_live_capable(
+        self, client: TestClient
+    ) -> None:
+        """The UI reads this to disable its LIVE toggle rather than guess."""
+        venues = client.get("/api/venues", headers=_auth()).json()
+
+        paper = next(v for v in venues if v["venue"] == "paper")
+        coinbase = next(
+            v for v in venues if v["venue"] == "coinbase" and v["market_type"] == "spot"
+        )
+        assert paper["supports_live"] is False
+        assert coinbase["supports_live"] is True
+
     def test_start_bot_then_get_shows_running(self, client: TestClient) -> None:
         """Verify that starting a bot sets its status to running and stopping sets it to stopped."""
         bot = self._create(client)
