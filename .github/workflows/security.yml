@@ -60,5 +60,53 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
       - run: npm ci
+      # Mirrors the pip-audit step above: a small, reviewed, dated allowlist,
+      # and ANY high/critical advisory not on it fails the build. `npm audit`
+      # has no --ignore flag, so the JSON is filtered here instead.
+      #
+      # Suppressions (review by 2026-10-01):
+      #   GHSA-qwww-vcr4-c8h2  react-router "RSC Mode CSRF Bypass".
+      #     Affects 7.12.0-8.2.0. There is no forward fix: react-router-dom's
+      #     latest published release is 7.18.2, still inside that range, and
+      #     npm's suggested remedy downgrades to 7.11.0 (breaking). The
+      #     advisory is specific to React Server Components mode; this app is a
+      #     client-rendered SPA (main.tsx mounts BrowserRouter, there is no RSC
+      #     and no server-side router), so the vulnerable path is not reachable.
+      #     Dependabot tracks the upgrade.
       - name: Audit npm dependencies (blocking on high+)
-        run: npm audit --audit-level=high
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, sys
+
+          ALLOWED = {"GHSA-qwww-vcr4-c8h2"}
+
+          report = subprocess.run(
+              ["npm", "audit", "--audit-level=high", "--json"],
+              capture_output=True, text=True,
+          ).stdout
+          advisories = json.loads(report).get("vulnerabilities", {})
+
+          unreviewed = []
+          for name, entry in advisories.items():
+              if entry.get("severity") not in ("high", "critical"):
+                  continue
+              for via in entry.get("via", []):
+                  if not isinstance(via, dict):
+                      continue
+                  ident = via.get("url", "").rsplit("/", 1)[-1]
+                  if ident not in ALLOWED:
+                      unreviewed.append(f"{ident}  {entry['severity']:<8} {name}")
+
+          if unreviewed:
+              print("Unreviewed high/critical advisories:", file=sys.stderr)
+              for line in sorted(set(unreviewed)):
+                  print(f"  {line}", file=sys.stderr)
+              print(
+                  "\nFix them, or add the advisory id to ALLOWED in this step "
+                  "with a justification and a review date.",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+
+          print(f"No unreviewed high/critical advisories ({len(ALLOWED)} suppressed).")
+          PY

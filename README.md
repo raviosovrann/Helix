@@ -50,8 +50,22 @@ regardless of bot count.
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 ```
+
+Then start everything with one command:
+
+```bash
+./run.sh
+```
+
+That builds the SPA, generates a secrets key on first run, prompts once for an
+operator password, and serves the UI and the API together on
+<http://localhost:8000>. There is **one process and one origin** — the service
+serves the built SPA itself, so there is no second server and no proxy.
+
+`./run.sh --port 9000` moves it; `./run.sh --rebuild` forces a fresh UI build.
+
+The manual equivalent, and the environment variables involved, are below.
 
 Generate a secrets-encryption key (venue credentials are encrypted at rest):
 
@@ -99,18 +113,25 @@ curl -X PUT localhost:8000/venues/coinbase/spot/secrets \
 
 ## Web UI
 
-The React SPA lives in `ui/` and talks to the service on `:8000` (the dev
-server proxies `/api` and `/ws` there).
+The React SPA lives in `ui/`. **The FastAPI service serves the built SPA**, so
+running the app is one process on one origin — `./run.sh` is all you need, and
+the UI is at the same address as the API.
+
+For UI development there is a separate Vite dev server with hot reload. It runs
+on its own origin and proxies `/api` and `/ws` to the service on `:8000`, so the
+service must already be running:
 
 ```bash
 cd ui
 npm install        # first time only
-npm run dev        # http://localhost:5173, log in with your data/users.json password
+npm run dev        # http://localhost:5173, hot reload; needs the service on :8000
 ```
 
+Use the dev server when you are editing the UI. Use `./run.sh` for everything
+else — running it, demoing it, and testing it the way it actually ships.
+
 Useful scripts: `npm test` (Vitest), `npm run typecheck`, `npm run lint`,
-`npm run build` (production bundle in `ui/dist`, served by the FastAPI
-service once 2B task B5 lands).
+`npm run build` (production bundle in `ui/dist`).
 
 ---
 

@@ -21,6 +21,15 @@ except Exception:  # pragma: no cover - optional third-party install
 
 _FLAT_TOL = 1e-9
 
+_DEFAULT_APP_ID = "TradingConsole"
+_DEFAULT_APP_VERSION = "1.0"
+"""Sent when the operator does not supply them.
+
+Tradovate's ``accesstokenrequest`` schema marks ``appId``/``appVersion``
+optional and only echoes them back, so asking an operator to invent values is
+two fields of friction for nothing.
+"""
+
 # Trailing slash + relative request paths (no leading "/") so httpx preserves
 # the "/v1" path segment when joining URLs.
 _DEMO_BASE = "https://demo.tradovateapi.com/v1/"
@@ -85,10 +94,10 @@ class TradovateVenue:
         *,
         name: str,
         password: str,
-        app_id: str,
-        app_version: str,
-        cid: str,
-        sec: str,
+        cid: str = "",
+        sec: str = "",
+        app_id: str = _DEFAULT_APP_ID,
+        app_version: str = _DEFAULT_APP_VERSION,
         live: bool = False,
         device_id: str = "",
     ) -> "TradovateVenue":
@@ -102,13 +111,20 @@ class TradovateVenue:
         ``live`` selects the API host, so a demo venue physically cannot reach
         the live broker even if the dry-run guard were bypassed.
 
+        Only ``name`` and ``password`` are required: Tradovate's
+        ``accesstokenrequest`` schema marks every other field optional, so the
+        operator is asked for their username, password and (for an API-enabled
+        account) the key pair -- not for an application id and version they
+        would have to invent.
+
         Args:
             name: Tradovate username.
             password: Tradovate password.
-            app_id: Registered application id.
-            app_version: Application version string.
-            cid: API client id.
-            sec: API client secret.
+            cid: API key id, for accounts where API access is provisioned.
+            sec: API key secret paired with ``cid``.
+            app_id: Application id. Defaults to this application's own name;
+                Tradovate only echoes it back.
+            app_version: Application version. Defaults as above.
             live: Selects the live host over demo, and arms real orders.
             device_id: Device identifier Tradovate associates with the session.
 
@@ -122,10 +138,13 @@ class TradovateVenue:
         if httpx is None:
             raise RuntimeError("httpx is not installed")
         base = _LIVE_BASE if live else _DEMO_BASE
-        creds = {
-            "name": name, "password": password, "appId": app_id,
-            "appVersion": app_version, "cid": cid, "sec": sec, "deviceId": device_id,
-        }
+        # Only send optional fields that carry a value. Tradovate's schema
+        # marks them optional, and posting empty strings has been a source of
+        # opaque auth rejections on other clients.
+        creds = {"name": name, "password": password, "appId": app_id, "appVersion": app_version}
+        for key, value in (("cid", cid), ("sec", sec), ("deviceId", device_id)):
+            if value:
+                creds[key] = value
         token = _TradovateAuth.access_token(base, creds)
         client = _TradovateClient(base, token)
         account = client.account()

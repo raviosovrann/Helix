@@ -9,9 +9,18 @@ interface CredField {
   name: string
   label: string
   optional?: boolean
+  /** What this value is and where the operator gets it. Every field has one. */
+  help: string
+  /** Shown greyed in the input as a shape hint, never as a usable value. */
+  placeholder?: string
 }
 
 // Which credential fields to collect per venue (stored via PUT secrets).
+//
+// Every field carries help text. These are opaque vendor-specific names — an
+// operator staring at "CID" and "Secret" with no guidance cannot tell whether
+// they want an account password or an API key, and guessing wrong fails at
+// start time with an authentication error that names neither.
 const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   // Paper needs none, and that is the point of it (#116): the demo path exists
   // so an operator can watch a bot trade before handing over any exchange key.
@@ -19,23 +28,84 @@ const CREDENTIAL_FIELDS: Record<string, CredField[]> = {
   // demanded Coinbase keys for a venue that authenticates nothing.
   paper: [],
   coinbase: [
-    { name: 'api_key', label: 'API key' },
-    { name: 'api_secret', label: 'API secret' },
-    { name: 'api_password', label: 'API passphrase', optional: true },
+    {
+      name: 'api_key',
+      label: 'API key',
+      help: 'Coinbase → Settings → API → New API key, with "trade" permission.',
+    },
+    {
+      name: 'api_secret',
+      label: 'API secret',
+      help: 'Shown once when the key is created. If you did not save it, make a new key.',
+    },
   ],
+  // Four, not six. Tradovate's accesstokenrequest schema marks appId and
+  // appVersion optional and only echoes them back, so the venue supplies its
+  // own defaults rather than asking the operator to invent values. cid/sec are
+  // the API key pair; name/password are the two the schema actually requires.
   tradovate: [
-    { name: 'name', label: 'Username' },
-    { name: 'password', label: 'Password' },
-    { name: 'app_id', label: 'App ID' },
-    { name: 'app_version', label: 'App version' },
-    { name: 'cid', label: 'CID' },
-    { name: 'sec', label: 'Secret' },
+    {
+      name: 'name',
+      label: 'Username',
+      help: 'The username you sign in to Tradovate with — not your email.',
+    },
+    {
+      name: 'password',
+      label: 'Password',
+      help: 'Your Tradovate account password.',
+    },
+    {
+      name: 'cid',
+      label: 'API key id',
+      help: 'Tradovate → Application Settings → API Access. Shown as "cid".',
+    },
+    {
+      name: 'sec',
+      label: 'API key secret',
+      help: 'Issued with that key id, and shown as "sec". Not your account password.',
+    },
   ],
 }
 
 function credFieldsFor(venue: string): CredField[] {
   return CREDENTIAL_FIELDS[venue] ?? CREDENTIAL_FIELDS.coinbase
 }
+
+/** One credential input with its explanation, wired for screen readers. */
+function CredentialField({
+  field,
+  value,
+  onChange,
+}: {
+  field: CredField
+  value: string
+  onChange: (value: string) => void
+}) {
+  const id = `cred-${field.name}`
+  return (
+    <div className="field">
+      <label htmlFor={id}>
+        {field.label}
+        {field.optional ? ' (optional)' : ''}
+      </label>
+      <input
+        id={id}
+        type="password"
+        autoComplete="off"
+        placeholder={field.placeholder}
+        aria-describedby={`${id}-help`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p className="field-help" id={`${id}-help`}>
+        {field.help}
+      </p>
+    </div>
+  )
+}
+
+/** Timeframe syntax the API accepts (#113): a positive integer and a unit. */
+const TIMEFRAME_PATTERN = /^[1-9][0-9]*[mhdw]$/
 
 /** Guided bot creation: venue → strategy → params + keys → review. Dry-run default. */
 export function NewBot() {
@@ -97,9 +167,25 @@ export function NewBot() {
   // Default to allowing LIVE while the venue list is still loading: absent
   // capabilities must not silently present a real venue as simulated.
   const liveCapable = selectedVenue?.supports_live ?? true
+
+  // Symbol format differs by market, so the hint has to as well. Typing
+  // "BTC/USD" into a futures bot earns a venue rejection at start time that
+  // explains nothing.
+  const symbolHelp =
+    marketType === 'futures'
+      ? 'Contract symbol including its month and year code — e.g. CLU6 for September 2026 crude oil.'
+      : 'Market pair as the exchange lists it, base first — e.g. BTC/USD.'
+
+  const timeframeError =
+    timeframe.trim() !== '' && !TIMEFRAME_PATTERN.test(timeframe.trim())
+      ? `"${timeframe}" is not a valid timeframe. Use a number and a unit, like 30m or 4h.`
+      : null
+
   const step3Valid =
     symbol.trim() !== '' &&
     Number(quantity) > 0 &&
+    timeframeError === null &&
+    timeframe.trim() !== '' &&
     credFields.every((f) => f.optional || (creds[f.name] ?? '').trim() !== '')
 
   function onLiveToggle(checked: boolean) {
@@ -137,11 +223,19 @@ export function NewBot() {
   return (
     <main className="page">
       <header className="topbar">
-        <h1>New bot — step {step} of 4</h1>
+        <h1>New bot</h1>
         <Link to="/" className="button-link">
           Cancel
         </Link>
       </header>
+
+      {/* Progress as a bar rather than "step 3 of 4" in the title: the heading
+          should say what the page is, not where you are in it. */}
+      <ol className="wizard-steps" aria-label={`Step ${step} of 4`}>
+        {[1, 2, 3, 4].map((n) => (
+          <li key={n} className={`wizard-step ${n <= step ? 'done' : ''}`} />
+        ))}
+      </ol>
 
       <div className="card wizard">
         {step === 1 && (
@@ -195,35 +289,67 @@ export function NewBot() {
               id="symbol"
               value={symbol}
               onChange={(e) => setSymbol(e.target.value)}
+              aria-describedby="symbol-help"
               required
             />
+            <p className="field-help" id="symbol-help">
+              {symbolHelp}
+            </p>
+
             <label htmlFor="timeframe">Timeframe</label>
             <input
               id="timeframe"
               value={timeframe}
               onChange={(e) => setTimeframe(e.target.value)}
+              aria-describedby="timeframe-help"
             />
+            <p className="field-help" id="timeframe-help">
+              Candle length the strategy evaluates on: a number and a unit. <code>1m</code>,{' '}
+              <code>30m</code>, <code>4h</code>, <code>1d</code>.
+            </p>
+            {timeframeError && (
+              <p className="field-error" role="alert">
+                {timeframeError}
+              </p>
+            )}
+
             <label htmlFor="quantity">Quantity</label>
             <input
               id="quantity"
               inputMode="decimal"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
+              aria-describedby="quantity-help"
             />
+            <p className="field-help" id="quantity-help">
+              Size of each order, in the instrument&apos;s own units — coins for crypto, contracts
+              for futures. Not dollars.
+            </p>
+
             <label htmlFor="perBotCap">Per-bot cap ($ notional)</label>
             <input
               id="perBotCap"
               inputMode="decimal"
               value={perBotCap}
               onChange={(e) => setPerBotCap(e.target.value)}
+              aria-describedby="perBotCap-help"
             />
+            <p className="field-help" id="perBotCap-help">
+              Most this one bot may have at risk at once, in dollars. An order that would exceed it
+              is refused before it reaches the venue.
+            </p>
+
             <label htmlFor="globalCap">Global cap ($ notional)</label>
             <input
               id="globalCap"
               inputMode="decimal"
               value={globalCap}
               onChange={(e) => setGlobalCap(e.target.value)}
+              aria-describedby="globalCap-help"
             />
+            <p className="field-help" id="globalCap-help">
+              Same limit, across every bot you run. The lower of the two applies.
+            </p>
 
             <h2>{credFields.length === 0 ? 'Credentials' : `${venue} credentials`}</h2>
             {credFields.length === 0 ? (
@@ -237,19 +363,12 @@ export function NewBot() {
               </p>
             )}
             {credFields.map((f) => (
-              <div key={f.name}>
-                <label htmlFor={`cred-${f.name}`}>
-                  {f.label}
-                  {f.optional ? ' (optional)' : ''}
-                </label>
-                <input
-                  id={`cred-${f.name}`}
-                  type="password"
-                  autoComplete="off"
-                  value={creds[f.name] ?? ''}
-                  onChange={(e) => setCreds((c) => ({ ...c, [f.name]: e.target.value }))}
-                />
-              </div>
+              <CredentialField
+                key={f.name}
+                field={f}
+                value={creds[f.name] ?? ''}
+                onChange={(v) => setCreds((c) => ({ ...c, [f.name]: v }))}
+              />
             ))}
           </>
         )}

@@ -110,9 +110,9 @@ describe('NewBot wizard', () => {
     await screen.findByRole('option', { name: 'spot' })
     const market = () => screen.getByLabelText(/market/i) as HTMLSelectElement
     expect(Array.from(market().options).map((o) => o.value)).toEqual(['spot', 'futures'])
-    // switch to tradovate → futures only (spot no longer offered)
-    await userEvent.selectOptions(screen.getByLabelText(/venue/i), 'tradovate')
-    expect(Array.from(market().options).map((o) => o.value)).toEqual(['futures'])
+    // switch to paper → spot only (futures no longer offered)
+    await userEvent.selectOptions(screen.getByLabelText(/venue/i), 'paper')
+    expect(Array.from(market().options).map((o) => o.value)).toEqual(['spot'])
   })
 
   it('creates a paper bot without asking for any credentials (#116)', async () => {
@@ -189,5 +189,93 @@ describe('venue capabilities (#125)', () => {
     await user.selectOptions(screen.getByLabelText(/market type/i), 'futures')
 
     expect(await screen.findByTestId('venue-capabilities')).toHaveTextContent(/long and short/i)
+  })
+})
+
+describe('wizard field guidance (#164)', () => {
+  it('explains every credential field it asks for', async () => {
+    // The invariant is that *every* field is explained, not that any
+    // particular sentence appears — asserting one string would let a new
+    // credential field ship with no guidance at all.
+    setup()
+    await screen.findByLabelText(/venue/i)
+    await next()
+    await next()
+
+    for (const label of [/^API key/, /^API secret/]) {
+      const input = screen.getByLabelText(label)
+      const helpId = input.getAttribute('aria-describedby')
+      expect(helpId, `${label} has no aria-describedby`).toBeTruthy()
+      expect(document.getElementById(helpId as string)?.textContent?.trim()).toBeTruthy()
+    }
+  })
+
+  it('asks Coinbase for exactly an API key and secret', async () => {
+    setup()
+    await screen.findByLabelText(/venue/i)
+    await next()
+    await next()
+
+    expect(screen.getByLabelText(/^API key/)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^API secret/)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^API passphrase/)).not.toBeInTheDocument()
+  })
+
+  it('asks Tradovate for four fields, not six', async () => {
+    // appId and appVersion are optional in Tradovate's accesstokenrequest
+    // schema and only echoed back, so the venue supplies its own defaults
+    // rather than making the operator invent values.
+    setup()
+    await screen.findByLabelText(/venue/i)
+    await userEvent.selectOptions(screen.getByLabelText(/venue/i), 'tradovate')
+    await next()
+    await next()
+
+    for (const label of [/^Username/, /^Password/, /^API key id/, /^API key secret/]) {
+      const input = screen.getByLabelText(label)
+      expect(input.getAttribute('aria-describedby'), `${label} unexplained`).toBeTruthy()
+    }
+    expect(screen.queryByLabelText(/^App ID/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/^App version/)).not.toBeInTheDocument()
+  })
+
+  it('gives a market-appropriate symbol example', async () => {
+    setup()
+    await screen.findByRole('option', { name: 'futures' })
+    await userEvent.selectOptions(screen.getByLabelText(/market type/i), 'futures')
+    await next()
+    await next()
+
+    // A futures operator typing BTC/USD gets a start-time rejection that
+    // explains nothing, so the hint has to match the venue.
+    expect(screen.getByText(/CLU6/)).toBeInTheDocument()
+  })
+
+  it('rejects a malformed timeframe before the bot is created', async () => {
+    setup()
+    await screen.findByLabelText(/venue/i)
+    await userEvent.selectOptions(screen.getByLabelText(/venue/i), 'paper')
+    await next()
+    await next()
+    await userEvent.type(screen.getByLabelText(/symbol/i), 'BTC/USD')
+    await userEvent.clear(screen.getByLabelText(/timeframe/i))
+    await userEvent.type(screen.getByLabelText(/timeframe/i), '30 minutes')
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/not a valid timeframe/i)
+    expect(screen.getByRole('button', { name: /next/i })).toBeDisabled()
+  })
+
+  it('accepts a well-formed timeframe', async () => {
+    setup()
+    await screen.findByLabelText(/venue/i)
+    await userEvent.selectOptions(screen.getByLabelText(/venue/i), 'paper')
+    await next()
+    await next()
+    await userEvent.type(screen.getByLabelText(/symbol/i), 'BTC/USD')
+    await userEvent.clear(screen.getByLabelText(/timeframe/i))
+    await userEvent.type(screen.getByLabelText(/timeframe/i), '30m')
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /next/i })).toBeEnabled()
   })
 })

@@ -1,38 +1,68 @@
-/* Design direction (#164), agreed before restyling — see doc/m4-plan.md.
-   Near-black, faintly green-tinted surfaces; one mint accent reserved for
-   primary action and positive state; muted grey body copy carrying hierarchy
-   against tight, bright headings. LIVE deliberately breaks the green system so
-   it can never read as a healthy state. Colour is never the only carrier of
-   meaning: every status pairs its colour with a dot and a text label. */
-:root {
-  --bg: #070b09;
-  --panel: #0e1512;
-  --panel-raised: #131b17;
-  --border: #1e2a24;
-  --border-strong: #2c3b33;
-  --text: #eaf2ed;
-  --muted: #8b9a92;
-  --accent: #4ade80;
-  --accent-dim: #22c55e;
-  --accent-glow: rgb(74 222 128 / 25%);
-  --danger: #f87171;
-  --warning: #fbbf24;
+@import '@fontsource-variable/inter';
 
-  /* One spacing scale, so padding stops being invented per component. */
+/* Design direction (#164) — see doc/m4-plan.md.
+ *
+ * Values are measured from the agreed reference (agentictraders.io) rather
+ * than eyeballed: a neutral near-black ground, surfaces built from low-alpha
+ * white overlays so they sit correctly on any background, one saturated
+ * emerald accent, and Inter set heavy and tight for headings.
+ *
+ * Two rules the system depends on:
+ *   - The accent means "primary action" or "in profit", nothing else. Spending
+ *     it on decoration is what makes an interface stop communicating.
+ *   - LIVE and loss use the red, which deliberately sits outside the green
+ *     system so real money can never read as a healthy state.
+ * Colour is never the sole carrier of meaning: every status pairs its colour
+ * with a dot and a word (pairs with the a11y work in #132).
+ */
+:root {
+  --bg: #050507;
+  --panel: #0a0b0d;
+  --panel-raised: #101114;
+
+  /* Surfaces as white overlays, matching the reference's construction. */
+  --surface-1: rgb(255 255 255 / 2%);
+  --surface-2: rgb(255 255 255 / 4%);
+  --border: rgb(255 255 255 / 8%);
+  --border-strong: rgb(255 255 255 / 14%);
+
+  --text: #ffffff;
+  --muted: #98a1ae;
+  --muted-dim: #6b7382;
+
+  --accent: #00e68a;
+  --accent-bright: #7dffc0;
+  --accent-ink: #001a11;
+  --accent-soft: rgb(0 230 138 / 10%);
+  --accent-line: rgb(0 230 138 / 35%);
+  --accent-glow: rgb(0 230 138 / 30%);
+
+  --danger: #ff6b7a;
+  --danger-soft: rgb(255 107 122 / 10%);
+  --danger-line: rgb(255 107 122 / 35%);
+  --warning: #ffc65c;
+  --warning-soft: rgb(255 198 92 / 10%);
+  --warning-line: rgb(255 198 92 / 35%);
+
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
   --space-4: 1rem;
   --space-5: 1.5rem;
   --space-6: 2rem;
-  --radius: 10px;
+  --space-7: 3rem;
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
   --radius-pill: 999px;
 
   font-family:
+    'Inter Variable',
+    Inter,
     system-ui,
     -apple-system,
-    'Segoe UI',
-    Roboto,
     sans-serif;
   color-scheme: dark;
 }
@@ -44,55 +74,98 @@
 body {
   margin: 0;
   background:
-    radial-gradient(90rem 40rem at 50% -20rem, rgb(74 222 128 / 6%), transparent 70%), var(--bg);
+    radial-gradient(70rem 34rem at 50% -14rem, rgb(0 230 138 / 7%), transparent 68%), var(--bg);
   background-attachment: fixed;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
+/* Headings are the reference's signature: heavy, tight, near-solid leading.
+   Tracking is negative and scales with size, which is what stops a large
+   heading reading as loose next to body copy. */
 h1,
 h2,
 h3 {
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(1.5rem, 1.2rem + 1.4vw, 2rem);
+}
+
+h2 {
+  font-size: 1.05rem;
   letter-spacing: -0.02em;
 }
 
-button {
+p {
+  margin: 0 0 var(--space-3);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+button,
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   cursor: pointer;
   border: 1px solid var(--border-strong);
-  background: var(--panel-raised);
+  background: var(--surface-2);
   color: var(--text);
-  padding: 0.5rem 0.9rem;
+  padding: 0.55rem 1.05rem;
   border-radius: var(--radius-pill);
-  font-size: 0.9rem;
-  font-weight: 500;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
   transition:
-    border-color 120ms ease,
-    background 120ms ease,
-    color 120ms ease;
+    border-color 140ms ease,
+    background 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
 }
 
-button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+button:hover:not(:disabled),
+.button-link:hover {
+  border-color: var(--border-strong);
+  background: rgb(255 255 255 / 8%);
+  color: var(--text);
 }
 
-/* The one primary action per screen. The glow is this accent's only flourish;
-   using it anywhere else would stop it meaning "this is the action". */
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* The one primary action per screen. The glow is the accent's only flourish;
+   spending it anywhere else stops it meaning "this is the action". */
 button.primary,
 .button-link.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #06210f;
-  font-weight: 600;
-  box-shadow: 0 0 0 0 var(--accent-glow);
+  color: var(--accent-ink);
+  box-shadow: 0 0 1.25rem -0.25rem var(--accent-glow);
 }
 
 button.primary:hover:not(:disabled),
 .button-link.primary:hover {
-  background: var(--accent-dim);
-  border-color: var(--accent-dim);
-  color: #06210f;
-  box-shadow: 0 0 1.5rem 0 var(--accent-glow);
+  background: var(--accent-bright);
+  border-color: var(--accent-bright);
+  color: var(--accent-ink);
+  box-shadow: 0 0 1.75rem -0.1rem var(--accent-glow);
 }
 
 button:focus-visible,
@@ -111,19 +184,53 @@ button:disabled {
 
 input,
 select {
-  background: var(--bg);
+  background: var(--surface-1);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.45rem 0.6rem;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  font-family: inherit;
   font-size: 0.9rem;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+input:hover,
+select:hover {
+  border-color: var(--border-strong);
+}
+
+input:focus {
+  border-color: var(--accent-line);
+  background: var(--surface-2);
+}
+
+input::placeholder {
+  color: var(--muted-dim);
+}
+
+select {
+  appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 1rem) calc(50% + 2px),
+    calc(100% - 0.7rem) calc(50% + 2px);
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 2.2rem;
 }
 
 label {
   display: block;
   font-size: 0.8rem;
+  font-weight: 500;
   color: var(--muted);
-  margin: 0.6rem 0 0.2rem;
+  margin: var(--space-4) 0 var(--space-2);
 }
 
 .error {
@@ -134,26 +241,27 @@ label {
   min-height: 100vh;
   display: grid;
   place-items: center;
+  padding: var(--space-4);
 }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   padding: var(--space-5);
-  width: min(360px, 90vw);
+  width: min(380px, 92vw);
   display: flex;
   flex-direction: column;
 }
 
 .card button {
-  margin-top: 1rem;
+  margin-top: var(--space-5);
 }
 
 .page {
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 1rem;
+  padding: var(--space-5) var(--space-4) var(--space-7);
 }
 
 .topbar {
@@ -163,13 +271,32 @@ label {
   gap: var(--space-3);
   flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
-  padding-bottom: var(--space-3);
+  padding-bottom: var(--space-4);
   margin-bottom: var(--space-5);
 }
 
 .topbar h1 {
-  font-size: 1.35rem;
-  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* The product mark. A logotype is most of what makes an interface read as a
+   product rather than an internal tool, and it costs one element. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(140deg, var(--accent), #00b36c);
+  color: var(--accent-ink);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  box-shadow: 0 0 1.25rem -0.4rem var(--accent-glow);
 }
 
 .muted {
@@ -309,8 +436,42 @@ button.danger:disabled {
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+
+/* Summary tiles (#164). The dashboard's first answer to "how is everything
+   doing" should not require reading every row. */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.stat {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--panel);
+}
+
+.stat-label {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-dim);
+}
+
+.stat-value {
+  margin: var(--space-2) 0 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .bot-table {
@@ -322,7 +483,7 @@ button.danger:disabled {
 .bot-table th,
 .bot-table td {
   text-align: left;
-  padding: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -419,6 +580,57 @@ button.danger:disabled {
   border-color: rgb(248 113 113 / 40%);
   background: rgb(248 113 113 / 8%);
   color: var(--danger);
+}
+
+/* Field help (#164). Every input says what it is and where the value comes
+   from; opaque vendor field names like "CID" are unguessable otherwise. */
+.field-help {
+  margin: 0.15rem 0 var(--space-4);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.field-help code {
+  font-size: 0.95em;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.field-error {
+  margin: 0.15rem 0 var(--space-4);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--danger);
+  max-width: 60ch;
+}
+
+.field input {
+  width: 100%;
+}
+
+/* Callouts carry a coloured left edge as well as a tint, so the distinction
+   survives without colour vision. */
+.callout {
+  margin: var(--space-3) 0;
+  padding: var(--space-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  max-width: 62ch;
+}
+
+.callout-warning {
+  border-color: rgb(251 191 36 / 40%);
+  border-left-color: var(--warning);
+  background: rgb(251 191 36 / 8%);
+  color: var(--text);
 }
 
 .skeleton-stack {
@@ -575,8 +787,36 @@ section.card {
   margin-left: 0.5rem;
 }
 
+/* The wizard is a single column of decisions, so it centres rather than
+   sitting against the left edge of a full-width page. */
 .wizard {
-  width: min(520px, 95vw);
+  width: min(560px, 100%);
+  margin: 0 auto;
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+}
+
+.wizard h2 {
+  margin-bottom: var(--space-2);
+}
+
+/* Step count reads as progress, not as a page title. */
+.wizard-steps {
+  display: flex;
+  gap: var(--space-2);
+  width: min(560px, 100%);
+  margin: 0 auto var(--space-4);
+}
+
+.wizard-step {
+  flex: 1;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--border);
+}
+
+.wizard-step.done {
+  background: var(--accent);
 }
 
 .wizard select {
@@ -604,4 +844,60 @@ section.card {
 
 .trade-negative {
   color: var(--danger);
+}
+
+.stat-suffix {
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--muted);
+}
+
+.stat-alert {
+  color: var(--danger);
+}
+
+/* Login is the first impression, so it gets the mark and a line of context
+   rather than a bare form. */
+.login .card {
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  align-items: flex-start;
+}
+
+.brand-lg {
+  width: 2.5rem;
+  height: 2.5rem;
+  font-size: 1.15rem;
+  border-radius: var(--radius);
+  margin-bottom: var(--space-4);
+}
+
+.login-sub {
+  margin: var(--space-2) 0 var(--space-2);
+  font-size: 0.9rem;
+}
+
+.login .card label:first-of-type {
+  margin-top: var(--space-4);
+}
+
+.login input {
+  width: 100%;
+}
+
+.login button {
+  width: 100%;
+}
+
+/* Row-level actions sit inside a table cell, so they take a smaller scale than
+   a page's primary action. Same shape, less weight. */
+.bot-table button {
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+}
+
+.wizard-steps {
+  list-style: none;
+  padding: 0;
 }

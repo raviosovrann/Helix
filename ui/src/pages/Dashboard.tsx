@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useBots, useStartBot, useStopBot } from '../api/hooks'
 import { BotTable } from '../components/BotTable'
+import { FleetSummary } from '../components/FleetSummary'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useAuth } from '../hooks/useAuth'
 import { useBotEvents } from '../hooks/useBotEvents'
@@ -61,7 +62,12 @@ export function Dashboard() {
   return (
     <main className="page">
       <header className="topbar">
-        <h1>Trading Console</h1>
+        <h1>
+          <span className="brand" aria-hidden="true">
+            TC
+          </span>
+          Trading Console
+        </h1>
         <nav className="button-row">
           <Link to="/bots/new" className="button-link primary">
             New bot
@@ -69,6 +75,8 @@ export function Dashboard() {
           <button onClick={() => void logout()}>Sign out</button>
         </nav>
       </header>
+
+      {bots && bots.length > 0 && <FleetSummary bots={bots} />}
 
       {isLoading && (
         <div className="skeleton-stack" data-testid="bots-loading">

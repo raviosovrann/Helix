@@ -28,7 +28,11 @@ export function Login() {
   return (
     <main className="login">
       <form onSubmit={onSubmit} className="card" aria-labelledby="login-title">
+        <span className="brand brand-lg" aria-hidden="true">
+          TC
+        </span>
         <h1 id="login-title">Trading Console</h1>
+        <p className="login-sub muted">Automated execution with risk limits, dry-run by default.</p>
         <label htmlFor="username">Username</label>
         <input
           id="username"
