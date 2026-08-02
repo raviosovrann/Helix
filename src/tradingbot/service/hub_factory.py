@@ -217,15 +217,18 @@ class HubFactory:
         venue = venue.strip().lower()
         market_type = market_type.strip().lower()
         for key in [k for k in self._hubs if k[0] == venue and k[1] == market_type]:
-            self._hubs.pop(key, None)
+            hub = self._hubs.pop(key, None)
             self._fingerprints.pop(key, None)
-            stream = self._streams.pop(key, None)
-            stop = getattr(stream, "stop", None)
-            if callable(stop):
-                try:
-                    stop()
-                except Exception:  # noqa: BLE001 - a bad client must not block rotation
-                    _log.exception("failed to stop superseded stream for %s/%s", venue, market_type)
+            self._streams.pop(key, None)
+            if hub is None:
+                continue
+            try:
+                # close() cancels the hub's reconnect loops *and* stops the
+                # feed. Stopping only the feed is no longer enough: the loop
+                # would simply reopen a socket on the superseded key (#117).
+                hub.close()
+            except Exception:  # noqa: BLE001 - a bad client must not block rotation
+                _log.exception("failed to close superseded hub for %s/%s", venue, market_type)
 
     def _creds(self, venue: str, market_type: str) -> dict:
         secrets = self._store.load_secrets()

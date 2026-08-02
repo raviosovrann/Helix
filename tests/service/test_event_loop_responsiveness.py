@@ -262,6 +262,9 @@ async def test_api_stays_responsive_while_a_warmup_blocks(
 
         await start
         assert feed.warmups == 1
+        # Stopped explicitly: a running bot's stream now reconnects forever
+        # (#117), so leaving it up outlives the test's event loop.
+        await ac.post(f"/api/bots/{bot_id}/stop", headers=_auth())
 
 
 @pytest.mark.asyncio
@@ -279,6 +282,7 @@ async def test_readiness_probe_answers_while_an_exchange_hangs(
         assert await _get_while_blocked(ac, "/healthz", feed) == 200
 
         await start
+        await ac.post(f"/api/bots/{bot_id}/stop", headers=_auth())
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from .datafeed import CcxtCandleFeed, _ohlcv_to_candle
@@ -404,5 +404,82 @@ def run_with_reconnect(
             break
         if gap_fill is not None:
             gap_fill()
+        if not healthy:
+            backoff = min(backoff * 2, max_backoff)
+
+
+async def run_async_with_reconnect(
+    *,
+    connect_and_run: Callable[[], Awaitable[None]],
+    should_stop: Callable[[], bool],
+    on_drop: Callable[[BaseException | None], None] | None = None,
+    gap_fill: Callable[[], Awaitable[None]] | None = None,
+    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    base_backoff: float = 1.0,
+    max_backoff: float = 60.0,
+    fatal: Callable[[BaseException], bool] | None = None,
+) -> None:
+    """Await a stream connection on the event loop, reconnecting on drop.
+
+    The async twin of :func:`run_with_reconnect`, with identical backoff
+    semantics. It exists because the service never calls the blocking ``run()``
+    path: ``MarketDataHub`` awaits ``run_async`` directly, so the sync
+    supervisor could not reach it and no service stream was ever resupervised
+    (#117).
+
+    A **clean return counts as a disconnect.** That is not a defensive choice —
+    it is the shape of the bug this fixes. ``CoinbaseStreamFeed.run_async``
+    opens one socket, consumes until it closes and then returns normally, so a
+    supervisor that only retried on exceptions would still leave the bot on NO
+    DATA within minutes.
+
+    Args:
+        connect_and_run: Awaits while connected; returns or raises on drop.
+        should_stop: Checked before connecting and around each sleep, so a
+            stopped stream never reconnects and never lingers in a backoff.
+        on_drop: Told about each disconnect, with the exception that caused it
+            or ``None`` for a clean return. Used to report a bot as degraded
+            while its data is actually missing.
+        gap_fill: Awaited after the backoff and *before* reconnecting, to
+            REST-fill bars missed during the outage. Filling afterwards would
+            race the first live bar into an out-of-order buffer.
+        sleep: Injected for tests, to avoid real reconnect delays.
+        base_backoff: First delay, and the value restored after a connection
+            that lived long enough to be considered healthy.
+        max_backoff: Ceiling for the exponential growth.
+        fatal: Classifies an exception as unretryable. Such an exception is
+            re-raised rather than backed off, because a venue that cannot
+            stream at all fails identically on every attempt (#170).
+
+    Raises:
+        asyncio.CancelledError: Propagated untouched — cancellation is how the
+            hub unsubscribes, so swallowing it would make a stopped bot's
+            stream immortal.
+        BaseException: Whatever ``fatal`` classified as unretryable.
+    """
+    backoff = base_backoff
+    while not should_stop():
+        dropped_by: BaseException | None = None
+        try:
+            await connect_and_run()
+            healthy = True
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if fatal is not None and fatal(exc):
+                raise
+            dropped_by = exc
+            healthy = False
+        if on_drop is not None:
+            on_drop(dropped_by)
+        if should_stop():
+            break
+        if healthy:
+            backoff = base_backoff
+        await sleep(backoff)
+        if should_stop():
+            break
+        if gap_fill is not None:
+            await gap_fill()
         if not healthy:
             backoff = min(backoff * 2, max_backoff)

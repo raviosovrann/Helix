@@ -176,6 +176,13 @@ class BotInstance:
     stream_listener: Any | None = None
     """Hub stream-exit listener registered while the bot runs."""
 
+    recovery_listener: Any | None = None
+    """Hub stream-recovery listener registered while the bot runs.
+
+    Paired with ``stream_listener``: streams reconnect (#117), so degradation
+    has to clear on its own rather than only on a restart.
+    """
+
     lane: Any | None = None
     """Single-worker pool serializing this bot's blocking strategy/order work."""
 
@@ -700,22 +707,50 @@ class BotSupervisor:
         bot.stream_listener = _on_stream_exit
         register(_on_stream_exit)
 
-    def _detach_stream_listener(self, bot: BotInstance) -> None:
-        """Remove ``bot``'s stream listener from its hub, if registered.
+        register_recovery = getattr(hub, "add_recovery_listener", None)
+        if not callable(register_recovery):
+            return
 
-        The hub outlives the bot, so leaving the listener attached would
-        degrade a bot that is no longer running.
+        def _on_stream_recovered(symbol: str, timeframe: str) -> None:
+            if symbol != bot.config.symbol or timeframe != bot.config.timeframe:
+                return
+            if bot.status not in ("running", "starting"):
+                return
+            # A permanent failure is never retried, so nothing can genuinely
+            # recover it. Clearing it here would report a bot as healthy when
+            # it will never receive another bar (#170).
+            if bot.degraded_permanent or not bot.degraded:
+                return
+            bot.degraded = False
+            bot.degraded_reason = None
+            self._publish_state(bot)
+
+        bot.recovery_listener = _on_stream_recovered
+        register_recovery(_on_stream_recovered)
+
+    def _detach_stream_listener(self, bot: BotInstance) -> None:
+        """Remove ``bot``'s stream and recovery listeners from its hub.
+
+        The hub outlives the bot, so leaving either attached would let another
+        bot's stream mutate the state of one that is no longer running.
 
         Args:
-            bot: Bot whose listener should be removed.
+            bot: Bot whose listeners should be removed.
         """
         listener = bot.stream_listener
+        recovery_listener = bot.recovery_listener
         bot.stream_listener = None
-        if listener is None or bot.hub is None:
+        bot.recovery_listener = None
+        if bot.hub is None:
             return
-        remove = getattr(bot.hub, "remove_stream_listener", None)
-        if callable(remove):
-            remove(listener)
+        if listener is not None:
+            remove = getattr(bot.hub, "remove_stream_listener", None)
+            if callable(remove):
+                remove(listener)
+        if recovery_listener is not None:
+            remove_recovery = getattr(bot.hub, "remove_recovery_listener", None)
+            if callable(remove_recovery):
+                remove_recovery(recovery_listener)
 
     def _snapshot(self, bot: BotInstance) -> tuple[Any, ...]:
         """Return the comparable state tuple used to suppress no-op events.

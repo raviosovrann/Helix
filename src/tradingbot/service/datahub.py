@@ -8,7 +8,7 @@ from typing import cast
 
 from ..datafeed import CandleFeed
 from ..models import Candle
-from ..stream import StreamingFeed, StreamingNotSupported
+from ..stream import StreamingFeed, StreamingNotSupported, run_async_with_reconnect
 from .blocking import BlockingCalls
 from .ratelimit import RateLimiter
 
@@ -21,6 +21,21 @@ _ExitListener = Callable[[str, str, str, bool], None]
 
 ``permanent`` marks a failure a restart cannot fix — a venue that does not
 implement streaming at all, as opposed to a dropped connection (#170).
+"""
+_RecoveryListener = Callable[[str, str], None]
+"""Called with ``(symbol, timeframe)`` when candles start arriving again.
+
+The counterpart to ``_ExitListener``. Now that a dropped stream reconnects
+instead of ending the bot, degradation has to be able to clear: otherwise one
+blip would leave a bot flagged for the rest of an overnight run.
+"""
+
+_GAPFILL_BARS = 50
+"""Bars refetched after an outage, matching ``StreamRuntime``'s default.
+
+Must comfortably exceed the longest outage the backoff allows (60s, so 60 bars
+on 1m is roughly the worst case) or the buffer keeps a hole. Duplicates are
+harmless: the candle buffer dedups on timestamp.
 """
 
 
@@ -59,6 +74,8 @@ class MarketDataHub:
         mtf_cache_seconds: float = 60.0,
         clock: Callable[[], float] = time.monotonic,
         workers: BlockingCalls | None = None,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        gapfill_bars: int = _GAPFILL_BARS,
     ) -> None:
         """Initialize the hub.
 
@@ -70,6 +87,8 @@ class MarketDataHub:
             clock: Time source, injected for deterministic tests.
             workers: Thread pool used to keep the blocking REST warmup off the
                 event loop (#111). Created per hub if not supplied.
+            sleep: Reconnect backoff, injected so tests need no wall clock.
+            gapfill_bars: Bars refetched over REST after a reconnect.
 
         Raises:
             ValueError: If ``mtf_cache_seconds`` is negative.
@@ -92,6 +111,11 @@ class MarketDataHub:
         self._warmup_locks: dict[_Key, asyncio.Lock] = {}
         self._latest_prices: dict[_Key, float] = {}
         self._exit_listeners: list[_ExitListener] = []
+        self._recovery_listeners: list[_RecoveryListener] = []
+        self._degraded: set[_Key] = set()
+        """Keys reported as degraded and not yet seen delivering candles again."""
+        self._sleep = sleep
+        self._gapfill_bars = gapfill_bars
         self._workers = workers if workers is not None else BlockingCalls("market-data")
         self._register_gap_reporting()
 
@@ -139,6 +163,24 @@ class MarketDataHub:
         if listener in self._exit_listeners:
             self._exit_listeners.remove(listener)
 
+    def add_recovery_listener(self, listener: _RecoveryListener) -> None:
+        """Register ``listener`` to be told when candles start arriving again.
+
+        Args:
+            listener: Callable invoked with ``(symbol, timeframe)``.
+        """
+        if listener not in self._recovery_listeners:
+            self._recovery_listeners.append(listener)
+
+    def remove_recovery_listener(self, listener: _RecoveryListener) -> None:
+        """Unregister ``listener``; unknown listeners are ignored.
+
+        Args:
+            listener: Callable previously passed to ``add_recovery_listener``.
+        """
+        if listener in self._recovery_listeners:
+            self._recovery_listeners.remove(listener)
+
     def _notify_stream_exit(self, key: _Key, reason: str, permanent: bool = False) -> None:
         """Tell every listener that ``key``'s stream stopped delivering data.
 
@@ -147,11 +189,30 @@ class MarketDataHub:
             reason: Human-readable cause, shown to the operator.
             permanent: Whether a restart could never fix this.
         """
+        self._degraded.add(key)
         for listener in tuple(self._exit_listeners):
             try:
                 listener(key[0], key[1], reason, permanent)
             except Exception:  # noqa: BLE001 - a bad listener must not kill the stream task
                 _log.exception("stream exit listener failed for %s %s", *key)
+
+    def _notify_stream_recovered(self, key: _Key) -> None:
+        """Tell every listener that ``key`` is delivering candles again.
+
+        Only fires for a key currently marked degraded, so a healthy stream
+        does not announce a recovery on every bar.
+
+        Args:
+            key: Symbol/timeframe that just produced a candle.
+        """
+        if key not in self._degraded:
+            return
+        self._degraded.discard(key)
+        for listener in tuple(self._recovery_listeners):
+            try:
+                listener(key[0], key[1])
+            except Exception:  # noqa: BLE001 - a bad listener must not kill the stream task
+                _log.exception("stream recovery listener failed for %s %s", *key)
 
     def subscribe(self, symbol: str, timeframe: str, handler: _Handler) -> None:
         """Register ``handler`` for closed candles on ``symbol/timeframe``.
@@ -207,32 +268,121 @@ class MarketDataHub:
         elif not self._handlers:
             self._stream_feed.stop()
 
-    async def _run_stream(self, key: _Key) -> None:
-        """Run the underlying stream for ``key`` until cancelled.
+    def close(self) -> None:
+        """Cancel every stream and stop the feed. Idempotent.
 
-        An exit that is not a cancellation is reported to the stream listeners:
-        handlers stay registered, so without that signal the bot goes on
-        reporting ``running`` while no candle ever arrives again.
+        Reconnection makes teardown mandatory rather than optional. A hub that
+        is dropped — on credential rotation (#137), or at shutdown — used to
+        die along with its stream tasks, because those tasks ended as soon as
+        the socket did. They now retry indefinitely by design, so a discarded
+        hub has to be told explicitly that it is finished, or it goes on
+        reopening sockets on credentials the operator believes they replaced.
+        """
+        for key, task in list(self._stream_tasks.items()):
+            # Emptying the handlers first makes ``should_stop`` true, so a loop
+            # already past its await cannot reconnect between here and the
+            # cancellation landing.
+            self._handlers.pop(key, None)
+            if not task.done():
+                task.cancel()
+        self._stream_tasks.clear()
+        try:
+            self._stream_feed.stop()
+        except Exception:  # noqa: BLE001 - a bad client must not block teardown
+            _log.exception("failed to stop stream feed during hub close")
+
+    async def _connect_stream(self, key: _Key) -> None:
+        """Await the feed's own run loop for ``key`` until the socket ends."""
+        runner = getattr(self._stream_feed, "run_async", None)
+        if callable(runner):
+            await cast(_StreamRunner, runner)(key[0])
+            return
+        legacy_runner = getattr(self._stream_feed, "run", None)
+        if not callable(legacy_runner):
+            raise RuntimeError("MarketDataHub requires stream feed run_async() or run()")
+        await asyncio.to_thread(legacy_runner, key[0])
+
+    def _report_drop(self, key: _Key, exc: BaseException | None) -> None:
+        """Report one disconnect, before the backoff and the reconnect.
+
+        A clean return is reported the same as an exception: both leave the
+        bot without data, and the Coinbase feed's normal failure mode is the
+        clean one.
+
+        Args:
+            key: Symbol/timeframe whose stream dropped.
+            exc: The exception that ended it, or ``None`` for a clean return.
+        """
+        if exc is None:
+            _log.warning("market data stream for %s %s returned unexpectedly", *key)
+            self._notify_stream_exit(key, "stream ended without an unsubscribe")
+        else:
+            _log.warning("market data stream dropped for %s %s: %s", key[0], key[1], exc)
+            self._notify_stream_exit(key, f"{type(exc).__name__}: {exc}")
+
+    async def _gap_fill(self, key: _Key) -> None:
+        """Refetch and replay the bars missed while ``key`` was disconnected.
+
+        The cached warmup is dropped first: serving it would hand back exactly
+        the bars the bot already had and silently skip the missed ones, which
+        is the whole reason for refilling. Replayed bars go through the normal
+        fan-out, and the candle buffer dedups on timestamp, so the overlap with
+        what was already seen costs nothing.
+
+        Failures are logged and swallowed — a REST hiccup must not stop the
+        reconnect it precedes.
+
+        Args:
+            key: Symbol/timeframe to refill.
+        """
+        symbol, timeframe = key
+        try:
+            self._warmup_cache.pop(key, None)
+            candles = await self.warmup(symbol, timeframe, self._gapfill_bars)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 - a failed refill must not block reconnecting
+            _log.exception("gap fill failed for %s %s", symbol, timeframe)
+            return
+        # Dispatched without the recovery signal: this ran *before* the
+        # reconnect, over REST. Bars from a refill prove the exchange answers,
+        # not that the socket is back, and clearing the degraded flag here
+        # would tell the operator the stream recovered while it is still down.
+        for candle in candles:
+            self._dispatch(key, candle)
+
+    async def _run_stream(self, key: _Key) -> None:
+        """Keep ``key``'s stream connected until it is unsubscribed.
+
+        Every disconnect — an exception *or* a clean return — is reported to
+        the stream listeners and then reconnected with backoff and a gap-fill.
+        Reporting matters even though we recover: the bot really is without
+        data until the socket is back, and the recovery signal that follows is
+        what clears it.
+
+        Only a failure a restart could never fix (a venue with no streaming at
+        all) ends the loop, because retrying that one fails identically every
+        time (#170).
         """
         try:
-            runner = getattr(self._stream_feed, "run_async", None)
-            if callable(runner):
-                await cast(_StreamRunner, runner)(key[0])
-            else:
-                legacy_runner = getattr(self._stream_feed, "run", None)
-                if not callable(legacy_runner):
-                    raise RuntimeError("MarketDataHub requires stream feed run_async() or run()")
-                await asyncio.to_thread(legacy_runner, key[0])
+            await run_async_with_reconnect(
+                connect_and_run=lambda: self._connect_stream(key),
+                # Unsubscribe cancels this task, but it also empties the
+                # handler list; checking that too keeps a reconnect from
+                # racing ahead of the cancellation.
+                should_stop=lambda: key not in self._handlers,
+                on_drop=lambda exc: self._report_drop(key, exc),
+                gap_fill=lambda: self._gap_fill(key),
+                sleep=self._sleep,
+                fatal=_is_permanent,
+            )
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            _log.exception("market data stream stopped for %s %s", *key)
+            _log.exception("market data stream stopped permanently for %s %s", *key)
             self._notify_stream_exit(
                 key, f"{type(exc).__name__}: {exc}", permanent=_is_permanent(exc)
             )
-        else:
-            _log.warning("market data stream for %s %s returned unexpectedly", *key)
-            self._notify_stream_exit(key, "stream ended without an unsubscribe")
         finally:
             try:
                 current = asyncio.current_task()
@@ -242,6 +392,13 @@ class MarketDataHub:
                 self._stream_tasks.pop(key, None)
 
     def _on_bar(self, key: _Key, candle: Candle) -> None:
+        """Handle a closed candle delivered by the live stream."""
+        # A streamed candle is the only honest evidence that a degraded stream
+        # is healthy again: the reconnect itself only proves a socket opened.
+        self._notify_stream_recovered(key)
+        self._dispatch(key, candle)
+
+    def _dispatch(self, key: _Key, candle: Candle) -> None:
         """Fan a closed candle out to all handlers for ``key``."""
         self._latest_prices[key] = candle.close
         for handler in tuple(self._handlers.get(key, ())):
