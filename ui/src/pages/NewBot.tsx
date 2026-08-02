@@ -224,7 +224,7 @@ export function NewBot() {
     <main className="page">
       <header className="topbar">
         <h1>New bot</h1>
-        <Link to="/" className="button-link">
+        <Link to="/dashboard" className="button-link">
           Cancel
         </Link>
       </header>

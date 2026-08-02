@@ -1175,6 +1175,22 @@ def create_app(
     return app
 
 
+class _ImmutableStaticFiles(StaticFiles):
+    """Serves build assets with a permanent cache.
+
+    Vite emits content-hashed filenames, so a given URL's bytes can never
+    change: any edit produces a new filename. Caching these immutably is what
+    makes ``no-cache`` on ``index.html`` cheap -- the document is rechecked on
+    every navigation, and the bundle it names is never refetched.
+    """
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Any:
+        """Attach the immutable cache header to each served file."""
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 def _mount_spa(app: FastAPI, dist: Path) -> None:
     """Serve the built SPA from ``dist`` when it contains ``index.html``.
 
@@ -1196,10 +1212,20 @@ def _mount_spa(app: FastAPI, dist: Path) -> None:
         return
     assets = root / "assets"
     if assets.is_dir():
-        app.mount("/assets", StaticFiles(directory=str(assets)), name="assets")
+        app.mount("/assets", _ImmutableStaticFiles(directory=str(assets)), name="assets")
 
     @app.get("/{full_path:path}")
     async def spa(full_path: str) -> FileResponse:
-        """Return the SPA entry point for every non-API deep link."""
+        """Return the SPA entry point for every non-API deep link.
+
+        ``index.html`` names the content-hashed bundle, so it must be
+        revalidated on every navigation. Without an explicit ``Cache-Control``
+        browsers apply *heuristic* caching -- they reuse the document without
+        asking the server -- and a deployed UI change stays invisible until the
+        operator hard-refreshes.
+
+        ``no-cache`` still permits a conditional request, so an unchanged
+        document costs a 304 rather than a full download.
+        """
         del full_path
-        return FileResponse(str(index))
+        return FileResponse(str(index), headers={"Cache-Control": "no-cache"})

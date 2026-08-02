@@ -901,3 +901,274 @@ section.card {
   list-style: none;
   padding: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Landing page. Public, signed-out, and the first thing anyone sees.
+   Wider rhythm than the console: this page is read, not operated.
+   --------------------------------------------------------------------------- */
+
+.landing {
+  --gutter: max(var(--space-4), calc((100vw - 1140px) / 2));
+}
+
+.landing-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--gutter);
+  background: rgb(5 5 7 / 72%);
+  backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.landing-links {
+  display: flex;
+  gap: var(--space-5);
+  margin-left: auto;
+  font-size: 0.875rem;
+}
+
+.landing-links a {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.landing-links a:hover {
+  color: var(--text);
+}
+
+/* On a narrow screen the section links fold away; Sign in never does, because
+   it is the only action this page exists to offer. */
+@media (max-width: 700px) {
+  .landing-links {
+    display: none;
+  }
+
+  .landing-nav {
+    justify-content: space-between;
+  }
+}
+
+.hero {
+  padding: clamp(3.5rem, 8vw, 7rem) var(--gutter) clamp(3rem, 6vw, 5rem);
+  text-align: center;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-5);
+  padding: 0.3rem 0.85rem;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.eyebrow-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+.hero-title {
+  font-size: clamp(2.4rem, 1.2rem + 5vw, 4.5rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  margin: 0 0 var(--space-5);
+}
+
+.accent-text {
+  color: var(--accent);
+}
+
+.hero-sub {
+  max-width: 44rem;
+  margin: 0 auto var(--space-6);
+  font-size: clamp(1rem, 0.95rem + 0.3vw, 1.15rem);
+  color: var(--muted);
+}
+
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+.hero-cta .button-link {
+  padding: 0.7rem 1.4rem;
+  font-size: 0.95rem;
+}
+
+.hero-points {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  justify-content: center;
+  list-style: none;
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.hero-points li::before {
+  content: '✓';
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: var(--space-2);
+}
+
+.landing-section {
+  padding: clamp(3rem, 6vw, 5rem) var(--gutter);
+  border-top: 1px solid var(--border);
+}
+
+.landing-section > h2 {
+  font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.4rem);
+  letter-spacing: -0.035em;
+  margin-bottom: var(--space-3);
+}
+
+.section-sub {
+  max-width: 42rem;
+  margin: 0 0 var(--space-6);
+  color: var(--muted);
+}
+
+.step-grid,
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.step,
+.feature {
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+
+.step h3,
+.feature h3 {
+  font-size: 1.02rem;
+  margin: 0 0 var(--space-2);
+}
+
+.step p,
+.feature p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.faq {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 48rem;
+}
+
+.faq-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: var(--space-4);
+}
+
+.faq-item summary {
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The marker doubles as the open/closed state, so the control reads correctly
+   without relying on the disclosure triangle the reset removes. */
+.faq-item summary::after {
+  content: '+';
+  color: var(--accent);
+  font-weight: 700;
+  flex: none;
+}
+
+.faq-item[open] summary::after {
+  content: '−';
+}
+
+.faq-item p {
+  margin: var(--space-3) 0 0;
+  font-size: 0.9rem;
+  max-width: 44rem;
+}
+
+.landing-cta {
+  padding: clamp(3rem, 6vw, 5rem) var(--gutter);
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.landing-cta h2 {
+  font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.2rem);
+  margin-bottom: var(--space-3);
+}
+
+.landing-cta .button-link {
+  margin-top: var(--space-4);
+  padding: 0.7rem 1.4rem;
+}
+
+.landing-footer {
+  padding: var(--space-5) var(--gutter) var(--space-6);
+  border-top: 1px solid var(--border);
+}
+
+.landing-footer p {
+  margin: 0;
+  font-size: 0.8rem;
+}

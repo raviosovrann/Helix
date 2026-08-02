@@ -91,7 +91,7 @@ export function BotDetail() {
         <p role="alert" className="state-error">
           Failed to load bot: {String(error ?? 'not found')}
         </p>
-        <Link to="/" className="button-link">
+        <Link to="/dashboard" className="button-link">
           Back to dashboard
         </Link>
       </main>
@@ -141,7 +141,7 @@ export function BotDetail() {
           {bot.symbol} <LiveBadge live={bot.live} />
         </h1>
         <nav className="button-row">
-          <Link to="/" className="button-link">
+          <Link to="/dashboard" className="button-link">
             Dashboard
           </Link>
           {bot.status === 'running' ? (

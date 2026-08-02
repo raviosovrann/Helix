@@ -187,6 +187,49 @@ class TestSpaServing:
         assert response.status_code == 200
         assert response.text == "console.log('hi')"
 
+    def test_index_is_never_served_from_cache_without_revalidating(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """index.html must carry no-cache, or a redeploy is invisible.
+
+        Without an explicit Cache-Control, browsers apply *heuristic* caching
+        and reuse the document without asking the server. index.html names the
+        content-hashed bundle, so a stale copy keeps loading the previous
+        build's JS and CSS: the operator sees the old app until they hard
+        refresh, which is exactly what happened after a UI deploy.
+        """
+        client = self._client(tmp_path, monkeypatch)
+
+        cache_control = client.get("/").headers.get("cache-control", "")
+
+        assert "no-cache" in cache_control or "no-store" in cache_control
+
+    def test_deep_link_also_revalidates(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Deep links return the same document, so they need the same header."""
+        client = self._client(tmp_path, monkeypatch)
+
+        cache_control = client.get("/bots/some-id").headers.get("cache-control", "")
+
+        assert "no-cache" in cache_control or "no-store" in cache_control
+
+    def test_hashed_assets_are_cached_immutably(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Asset filenames carry a content hash, so they never need revalidating.
+
+        The pair matters: the document is always rechecked and the bundle it
+        names never is. Caching neither would make every navigation refetch the
+        whole app.
+        """
+        client = self._client(tmp_path, monkeypatch)
+
+        cache_control = client.get("/assets/app.js").headers.get("cache-control", "")
+
+        assert "immutable" in cache_control
+        assert "max-age=" in cache_control
+
     def test_deep_link_falls_back_to_index(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """A client-side route falls back to index.html (SPA routing)."""
         client = self._client(tmp_path, monkeypatch)

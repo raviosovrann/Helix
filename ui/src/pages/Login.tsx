@@ -17,7 +17,7 @@ export function Login() {
     setBusy(true)
     try {
       await login(username, password)
-      navigate('/')
+      navigate('/dashboard')
     } catch {
       setError('Invalid username or password')
     } finally {
