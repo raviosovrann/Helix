@@ -16,15 +16,15 @@ from typing import Any, cast
 import httpx
 import pytest
 
-from tradingbot.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
-from tradingbot.service.api import create_app
-from tradingbot.service.auth import hash_password
-from tradingbot.service.datahub import MarketDataHub
-from tradingbot.service.events import EventBus
-from tradingbot.service.ratelimit import RateLimiter
-from tradingbot.service.exposure import ExposureTracker
-from tradingbot.service.store import BotStore
-from tradingbot.service.supervisor import BotSupervisor
+from helix.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
+from helix.service.api import create_app
+from helix.service.auth import hash_password
+from helix.service.datahub import MarketDataHub
+from helix.service.events import EventBus
+from helix.service.ratelimit import RateLimiter
+from helix.service.exposure import ExposureTracker
+from helix.service.store import BotStore
+from helix.service.supervisor import BotSupervisor
 
 _TOKEN = "test-token"
 _TOKEN_HASH = hashlib.sha256(_TOKEN.encode()).hexdigest()
@@ -140,7 +140,7 @@ class _BlockingVenue:
 
     def contract_spec(self, symbol: str):
         """Derivative metadata (#124), so a futures bot can start."""
-        from tradingbot.venues.contracts import ContractSpec
+        from helix.venues.contracts import ContractSpec
         return ContractSpec(
             symbol=symbol, contract_size=1.0, linear=True, quote_currency="USD",
             settle_currency="USD", tick_size=None, is_derivative=True,
@@ -200,9 +200,9 @@ def _build(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, strategy=None, fe
     feed = feed if feed is not None else _BlockingCandleFeed()
     hub = _hub_with(feed)
     venue = venue or _BlockingVenue()
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: venue)
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: venue)
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy",
+        "helix.service.supervisor.build_strategy",
         lambda *a, **k: strategy if strategy is not None else _IdleStrategy(),
     )
     supervisor = BotSupervisor(
@@ -262,6 +262,9 @@ async def test_api_stays_responsive_while_a_warmup_blocks(
 
         await start
         assert feed.warmups == 1
+        # Stopped explicitly: a running bot's stream now reconnects forever
+        # (#117), so leaving it up outlives the test's event loop.
+        await ac.post(f"/api/bots/{bot_id}/stop", headers=_auth())
 
 
 @pytest.mark.asyncio
@@ -279,6 +282,7 @@ async def test_readiness_probe_answers_while_an_exchange_hangs(
         assert await _get_while_blocked(ac, "/healthz", feed) == 200
 
         await start
+        await ac.post(f"/api/bots/{bot_id}/stop", headers=_auth())
 
 
 @pytest.mark.asyncio
@@ -289,8 +293,8 @@ async def test_a_slow_bot_does_not_delay_another_bots_start(
     slow_feed = _BlockingCandleFeed(seconds=BLOCK_SECONDS)
     hubs = {"slow": _hub_with(slow_feed), "fast": _hub_with(_BlockingCandleFeed(seconds=0.0))}
 
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _BlockingVenue(0.0))
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", lambda *a, **k: _IdleStrategy())
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: _BlockingVenue(0.0))
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", lambda *a, **k: _IdleStrategy())
     supervisor = BotSupervisor(
         # ETH is the "fast" market; everything else is the stuck one.
         hub_factory=lambda cfg: hubs["fast"] if cfg.symbol.startswith("ETH") else hubs["slow"],
@@ -398,8 +402,8 @@ async def test_order_placement_does_not_block_the_loop(
         candle_feed=cast(Any, _BlockingCandleFeed(seconds=0.0)),
         limiter=RateLimiter(1000, 1000),
     )
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: venue)
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: venue)
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: hub,
         event_bus=EventBus(),

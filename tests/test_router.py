@@ -1,8 +1,8 @@
 """Tests for signal routing and risk integration."""
 
-from tradingbot.models import Action, OrderResult, OrderType, PositionSide, Side, Signal
-from tradingbot.router import SignalRouter
-from tradingbot.service.exposure import ExposureTracker
+from helix.models import Action, OrderResult, OrderType, PositionSide, Side, Signal
+from helix.router import SignalRouter
+from helix.service.exposure import ExposureTracker
 
 
 class StubVenue:
@@ -221,8 +221,8 @@ def test_close_omits_the_owned_quantity_when_none_is_configured():
 
 
 def _spot_caps():
-    from tradingbot.models import OrderType as _OT
-    from tradingbot.venues.capabilities import VenueCapabilities
+    from helix.models import OrderType as _OT
+    from helix.venues.capabilities import VenueCapabilities
     return VenueCapabilities(
         venue="coinbase", market_type="spot", supports_short=False,
         supports_reduce_only=False,

@@ -1,13 +1,13 @@
 """Test-only doubles.
 
 These stand in for real venues/feeds so the suite runs without network or
-credentials. They are intentionally NOT part of the shipped ``tradingbot``
+credentials. They are intentionally NOT part of the shipped ``helix``
 package — the application only ever talks to a real exchange via ccxt.
 """
 
 from collections.abc import Mapping, Sequence
 
-from tradingbot.models import (
+from helix.models import (
     Candle,
     Order,
     OrderResult,

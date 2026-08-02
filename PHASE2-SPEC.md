@@ -1,4 +1,4 @@
-# Phase 2 — "Trading Console" Design
+# Phase 2 — "Helix" Design
 
 Status: approved (design), pending spec review
 Date: 2026-07-14
@@ -102,7 +102,7 @@ Each is its own spec → plan → build cycle. Order:
 
 ## Strategy plugin system
 
-New package `src/tradingbot/strategies/`:
+New package `src/helix/strategies/`:
 
 ```
 strategies/

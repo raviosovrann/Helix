@@ -2,7 +2,7 @@
 
 import pytest
 
-from tradingbot.models import Candle, Side, Order, OrderResult, Position, OrderType, PositionSide
+from helix.models import Candle, Side, Order, OrderResult, Position, OrderType, PositionSide
 
 
 def test_candle_fields():

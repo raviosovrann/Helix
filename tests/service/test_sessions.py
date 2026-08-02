@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tradingbot.service.sessions import SessionStore, hash_session_id
-from tradingbot.service.store import BotStore
+from helix.service.sessions import SessionStore, hash_session_id
+from helix.service.store import BotStore
 
 
 def _store(tmp_path: Path) -> BotStore:

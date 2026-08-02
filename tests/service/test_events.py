@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.events import EventBus, EventSubscription, OrderEvent
+from helix.service.events import EventBus, EventSubscription, OrderEvent
 
 
 @pytest.mark.asyncio

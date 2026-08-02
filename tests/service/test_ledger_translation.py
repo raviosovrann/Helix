@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.models import Order, OrderResult, OrderType, Side
-from tradingbot.service.ledger import (
+from helix.models import Order, OrderResult, OrderType, Side
+from helix.service.ledger import (
     OrderLedger,
     OrderState,
     events_from_payload,

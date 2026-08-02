@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.hub_factory import HubFactory, _default_feed_builder
-from tradingbot.service.supervisor import BotConfig
+from helix.service.hub_factory import HubFactory, _default_feed_builder
+from helix.service.supervisor import BotConfig
 
 
 class _FakeStream:
@@ -92,7 +92,7 @@ def test_coinbase_uses_the_native_feed_not_ccxt() -> None:
     ccxt has no watchOHLCV for coinbase, so the default builder must return the
     native Advanced Trade feeds instead.
     """
-    from tradingbot.coinbase_feed import CoinbaseCandleFeed, CoinbaseStreamFeed
+    from helix.coinbase_feed import CoinbaseCandleFeed, CoinbaseStreamFeed
 
     stream_feed, candle_feed = _default_feed_builder("coinbase", "spot", "1m", {})
 
@@ -123,7 +123,7 @@ def test_coinbase_futures_still_routes_through_ccxt() -> None:
     in ccxt) with its own market data; sending them to the spot Advanced Trade
     feed would silently stream the wrong market.
     """
-    from tradingbot.coinbase_feed import CoinbaseStreamFeed
+    from helix.coinbase_feed import CoinbaseStreamFeed
 
     with pytest.raises(Exception) as excinfo:
         # No ccxt credentials here, so this raises rather than returning a
@@ -135,7 +135,7 @@ def test_coinbase_futures_still_routes_through_ccxt() -> None:
 
 def test_an_explicit_exchange_override_still_uses_ccxt() -> None:
     """Verify creds['exchange'] keeps routing through ccxt for other venues."""
-    from tradingbot.coinbase_feed import CoinbaseStreamFeed
+    from helix.coinbase_feed import CoinbaseStreamFeed
 
     calls: list = []
     try:

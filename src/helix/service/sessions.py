@@ -5,7 +5,7 @@ SameSite=Strict`` cookie. This module stores the *hash* of that id together with
 the owning user, a CSRF token, and idle/absolute lifetime anchors, so a leaked
 ``sessions.json`` cannot be replayed and any session can be revoked immediately.
 
-Persistence is delegated to :class:`~tradingbot.service.store.BotStore`, which
+Persistence is delegated to :class:`~helix.service.store.BotStore`, which
 provides the transactional, permission-hardened file storage; this class owns
 only the session *semantics* (id generation, hashing, expiry, CSRF).
 """
@@ -19,6 +19,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from ..config import env
 from .store import BotStore
 
 # Idle timeout: a session unused for this long is expired. Absolute lifetime: a
@@ -77,19 +78,19 @@ class SessionStore:
         Args:
             store: Persistence layer that holds the session records.
             idle_ttl: Seconds of inactivity before a session expires. Defaults to
-                ``TRADINGBOT_SESSION_IDLE_TTL`` or 30 minutes.
+                ``HELIX_SESSION_IDLE_TTL`` or 30 minutes.
             absolute_ttl: Maximum session age in seconds regardless of activity.
-                Defaults to ``TRADINGBOT_SESSION_ABSOLUTE_TTL`` or 12 hours.
+                Defaults to ``HELIX_SESSION_ABSOLUTE_TTL`` or 12 hours.
             clock: Callable returning the current epoch time (injectable for tests).
         """
         self._store = store
         self._idle_ttl = (
             idle_ttl if idle_ttl is not None
-            else _env_ttl("TRADINGBOT_SESSION_IDLE_TTL", _DEFAULT_IDLE_TTL)
+            else _env_ttl("SESSION_IDLE_TTL", _DEFAULT_IDLE_TTL)
         )
         self._absolute_ttl = (
             absolute_ttl if absolute_ttl is not None
-            else _env_ttl("TRADINGBOT_SESSION_ABSOLUTE_TTL", _DEFAULT_ABSOLUTE_TTL)
+            else _env_ttl("SESSION_ABSOLUTE_TTL", _DEFAULT_ABSOLUTE_TTL)
         )
         self._clock = clock
 

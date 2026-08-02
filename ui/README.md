@@ -1,6 +1,6 @@
-# Trading Console UI
+# Helix UI
 
-The React + TypeScript SPA for the Trading Console. It talks to the FastAPI
+The React + TypeScript SPA for the Helix. It talks to the FastAPI
 service under `/api` and streams live bot events over `/ws`.
 
 **Operator and developer documentation lives in
@@ -41,7 +41,7 @@ service serves at `/`.
   dialog, live badge, PnL sparkline).
 - `src/pages/` — Login, Dashboard, BotDetail, NewBot wizard.
 - `src/types.ts` — types mirroring the backend DTOs; keep in sync with
-  `src/tradingbot/service/dto.py`.
+  `src/helix/service/dto.py`.
 
 Authentication is an HttpOnly cookie session — the SPA never holds a token.
 State-changing requests echo the readable `tb_csrf` cookie in an

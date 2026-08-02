@@ -2,8 +2,8 @@
 
 import pytest
 
-from tradingbot.models import Order, OrderType, PositionSide, Side
-from tradingbot.venues.tradovate import TradovateVenue
+from helix.models import Order, OrderType, PositionSide, Side
+from helix.venues.tradovate import TradovateVenue
 
 
 class _FakeClient:
@@ -180,7 +180,7 @@ def test_contract_sizes_for_micro_and_standard():
 
 def test_from_credentials_requires_httpx(monkeypatch):
     """Verify that from_credentials requires httpx to be available."""
-    import tradingbot.venues.tradovate as tv
+    import helix.venues.tradovate as tv
 
     monkeypatch.setattr(tv, "httpx", None)
     with pytest.raises(RuntimeError):
@@ -220,13 +220,13 @@ class TestContractSpec:
 
     def test_an_unknown_product_is_refused_not_defaulted_to_one(self):
         """The #124 acceptance criterion, on the venue that had the bug."""
-        from tradingbot.venues.contracts import ContractMetadataError
+        from helix.venues.contracts import ContractMetadataError
 
         with pytest.raises(ContractMetadataError, match="ESZ5|unknown|not known"):
             self._venue().contract_spec("ESZ5")
 
     def test_the_refusal_names_the_symbol_for_the_operator(self):
-        from tradingbot.venues.contracts import ContractMetadataError
+        from helix.venues.contracts import ContractMetadataError
 
         with pytest.raises(ContractMetadataError) as excinfo:
             self._venue().contract_spec("NQZ5")

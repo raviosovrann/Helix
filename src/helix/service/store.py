@@ -440,7 +440,7 @@ class BotStore:
 
         The file holds a single encrypted token (see :mod:`.crypto`). A missing
         or empty file yields an empty dict; a token that cannot be decrypted
-        (bad JSON, wrong/absent ``TRADINGBOT_SECRETS_KEY``) is logged and treated
+        (bad JSON, wrong/absent ``HELIX_SECRETS_KEY``) is logged and treated
         as empty so a misconfiguration fails closed rather than crashing.
 
         Returns:

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.hub_factory import HubFactory
-from tradingbot.service.supervisor import BotConfig
+from helix.service.hub_factory import HubFactory
+from helix.service.supervisor import BotConfig
 
 
 class _FakeStream:
@@ -188,3 +188,51 @@ def test_a_failed_rebuild_does_not_leave_a_stale_hub_cached() -> None:
     store.secrets = {"coinbase": {"spot": {"api_key": "good", "api_secret": "s"}}}
     factory(_cfg("bot-1"))
     assert built[-1]["creds"]["api_key"] == "good"
+
+
+@pytest.mark.asyncio
+async def test_rotation_stops_the_superseded_hub_reconnecting() -> None:
+    """Verify a superseded hub stops reopening sockets, not just its current one.
+
+    Streams retry on drop now (#117), so dropping a hub from the cache no
+    longer ends it: without an explicit teardown the old hub keeps
+    reconnecting on exactly the key the operator just replaced.
+    """
+    import asyncio
+
+    class _DroppingStream(_FakeStream):
+        def __init__(self) -> None:
+            super().__init__()
+            self.runs = 0
+
+        async def run_async(self, *symbols) -> None:
+            del symbols
+            self.runs += 1  # socket closes immediately, so the hub reconnects
+
+    async def _noop_sleep(_seconds: float) -> None:
+        await asyncio.sleep(0)
+
+    built: list = []
+
+    def feed_builder(venue, market_type, timeframe, creds):
+        stream = _DroppingStream()
+        built.append({"creds": dict(creds), "stream": stream})
+        return stream, _FakeCandle()
+
+    store = _MutableStore({"coinbase": {"spot": {"api_key": "old", "api_secret": "s"}}})
+    factory = HubFactory(store, feed_builder=feed_builder)
+
+    hub = factory(_cfg("bot-1"))
+    hub._sleep = _noop_sleep  # avoid a real backoff; behaviour under test is teardown
+    hub.subscribe("BTC/USD", "1h", lambda candle: None)
+    for _ in range(10):
+        await asyncio.sleep(0)
+
+    store.secrets = {"coinbase": {"spot": {"api_key": "new", "api_secret": "s"}}}
+    factory(_cfg("bot-1"))
+    settled = built[0]["stream"].runs
+    for _ in range(20):
+        await asyncio.sleep(0)
+
+    assert built[0]["stream"].runs == settled, "the superseded hub kept reconnecting"
+    assert built[0]["stream"].stopped == 1

@@ -1,7 +1,7 @@
 """Strategy plugin package.
 
 Importing this package auto-discovers and registers every public strategy
-module under ``src/tradingbot/strategies``.
+module under ``src/helix/strategies``.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.venue_errors import classify_venue_error, redact
+from helix.service.venue_errors import classify_venue_error, redact
 
 ccxt = pytest.importorskip("ccxt")
 

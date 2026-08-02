@@ -6,9 +6,9 @@ import asyncio
 
 import pytest
 
-from tradingbot.models import Candle
-from tradingbot.strategies.base import DataRequirements, MarketData
-from tradingbot.service.strategy_data import HubMarketData, MissingHistoryError
+from helix.models import Candle
+from helix.strategies.base import DataRequirements, MarketData
+from helix.service.strategy_data import HubMarketData, MissingHistoryError
 
 
 def _c(timestamp: int) -> Candle:

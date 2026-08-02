@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.models import Order, OrderResult, OrderType, Position, PositionSide, Side
-from tradingbot.service.exposure import ExposureTracker
-from tradingbot.service.risk import RiskGuard
+from helix.models import Order, OrderResult, OrderType, Position, PositionSide, Side
+from helix.service.exposure import ExposureTracker
+from helix.service.risk import RiskGuard
 
 
 class _FakeVenue:
@@ -64,7 +64,7 @@ def _contract(size: float):
     construction -- which is why the old NaN-multiplier case is gone; see
     tests/test_contracts.py for the refusal.
     """
-    from tradingbot.venues.contracts import ContractSpec
+    from helix.venues.contracts import ContractSpec
     return ContractSpec(
         symbol="BTC/USD", contract_size=size, linear=True, quote_currency="USD",
         settle_currency="USD", tick_size=None, is_derivative=True,
@@ -291,7 +291,7 @@ class TestInverseContractExposure:
     """
 
     def _spec(self, *, linear: bool, size: float):
-        from tradingbot.venues.contracts import ContractSpec
+        from helix.venues.contracts import ContractSpec
         return ContractSpec(
             symbol="BTC/USD", contract_size=size, linear=linear,
             quote_currency="USD", settle_currency="USD", tick_size=None,
@@ -367,7 +367,7 @@ class TestExposureAccounting:
     """
 
     def _guard(self, venue, *, tracker=None, per_bot_cap=100.0, price=60.0):
-        from tradingbot.service.exposure import ExposureTracker
+        from helix.service.exposure import ExposureTracker
         tracker = tracker or ExposureTracker()
         return tracker, RiskGuard(
             venue, per_bot_cap=per_bot_cap, global_cap=1_000.0,
@@ -471,7 +471,7 @@ class TestExposureAccounting:
         assert guard.place_order(_order(qty=1.0)).ok is True
 
     def test_two_bots_are_capped_independently(self):
-        from tradingbot.service.exposure import ExposureTracker
+        from helix.service.exposure import ExposureTracker
         tracker = ExposureTracker()
         venue_a, venue_b = _FakeVenue(), _FakeVenue()
         _, guard_a = self._guard(venue_a, tracker=tracker)
@@ -485,7 +485,7 @@ class TestExposureAccounting:
         assert tracker.total() == pytest.approx(120.0)
 
     def test_the_global_cap_binds_across_bots(self):
-        from tradingbot.service.exposure import ExposureTracker
+        from helix.service.exposure import ExposureTracker
         tracker = ExposureTracker()
         _, guard_a = self._guard(_FakeVenue(), tracker=tracker)
         guard_b = RiskGuard(

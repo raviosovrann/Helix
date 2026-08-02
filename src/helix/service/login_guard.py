@@ -6,14 +6,15 @@ cooldown window. This is an internal-deployment policy — process-local, no
 external store — sized to slow brute force without locking out a fat-fingered
 operator for long. Both parameters are environment-tunable:
 
-- ``TRADINGBOT_LOGIN_MAX_FAILURES`` (default 5)
-- ``TRADINGBOT_LOGIN_LOCKOUT_SECONDS`` (default 300)
+- ``HELIX_LOGIN_MAX_FAILURES`` (default 5)
+- ``HELIX_LOGIN_LOCKOUT_SECONDS`` (default 300)
 """
 
 from __future__ import annotations
 
-import os
 import time
+
+from ..config import env
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
@@ -43,7 +44,7 @@ class LoginLocked(Exception):
 
 def _env_int(name: str, default: int) -> int:
     """Return a positive int from ``name`` or ``default``."""
-    raw = os.environ.get(name, "").strip()
+    raw = env(name).strip()
     if not raw:
         return default
     try:
@@ -63,8 +64,8 @@ class _Entry:
 class LoginGuard:
     """Track and throttle failed login attempts per key."""
 
-    max_failures: int = field(default_factory=lambda: _env_int("TRADINGBOT_LOGIN_MAX_FAILURES", _DEFAULT_MAX_FAILURES))
-    lockout_seconds: int = field(default_factory=lambda: _env_int("TRADINGBOT_LOGIN_LOCKOUT_SECONDS", _DEFAULT_LOCKOUT_SECONDS))
+    max_failures: int = field(default_factory=lambda: _env_int("LOGIN_MAX_FAILURES", _DEFAULT_MAX_FAILURES))
+    lockout_seconds: int = field(default_factory=lambda: _env_int("LOGIN_LOCKOUT_SECONDS", _DEFAULT_LOCKOUT_SECONDS))
     clock: Callable[[], float] = time.monotonic
     _entries: dict[str, _Entry] = field(default_factory=dict)
 

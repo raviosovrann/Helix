@@ -31,4 +31,4 @@ jobs:
       - name: Run bandit (blocking, medium severity + confidence)
         # -ll = report medium+ severity, -ii = medium+ confidence. Config
         # (exclude_dirs) comes from pyproject.toml [tool.bandit].
-        run: bandit -c pyproject.toml -r src/tradingbot -ll -ii
+        run: bandit -c pyproject.toml -r src/helix -ll -ii

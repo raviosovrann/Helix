@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start the Trading Console: one command, one process, one URL.
+# Start the Helix: one command, one process, one URL.
 #
 # The service already serves the built SPA (see service/main.py), so there is
 # no second dev server and no proxy to keep in step. Running the Vite dev
@@ -31,18 +31,18 @@ done
 PYTHON=".venv/bin/python"
 [ -x "$PYTHON" ] || { echo "error: $PYTHON not found. Create the venv first." >&2; exit 1; }
 
-export TRADINGBOT_DATA_DIR="${TRADINGBOT_DATA_DIR:-data}"
-mkdir -p "$TRADINGBOT_DATA_DIR"
+export HELIX_DATA_DIR="${HELIX_DATA_DIR:-data}"
+mkdir -p "$HELIX_DATA_DIR"
 
 # The key encrypts stored venue credentials. Losing it makes them unreadable,
 # so it is generated once and kept, never regenerated on each run.
-KEY_FILE="${TRADINGBOT_SECRETS_KEY_FILE:-.secrets.key}"
+KEY_FILE="${HELIX_SECRETS_KEY_FILE:-.secrets.key}"
 if [ ! -f "$KEY_FILE" ]; then
   "$PYTHON" -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())" > "$KEY_FILE"
   chmod 600 "$KEY_FILE"
   echo "generated $KEY_FILE (keep it: stored venue credentials cannot be read without it)"
 fi
-export TRADINGBOT_SECRETS_KEY="$(cat "$KEY_FILE")"
+export HELIX_SECRETS_KEY="$(cat "$KEY_FILE")"
 
 # Build the SPA when it is missing or stale. Comparing against the newest
 # source file means an edit is picked up without a flag, while an unchanged
@@ -55,13 +55,13 @@ fi
 
 # Seed the first operator. An empty console with no way to log in is not a
 # useful starting state.
-if [ ! -s "$TRADINGBOT_DATA_DIR/users.json" ]; then
+if [ ! -s "$HELIX_DATA_DIR/users.json" ]; then
   echo
   echo "No operator account yet. Creating one — choose a password (twice)."
-  PYTHONPATH=src "$PYTHON" -m tradingbot.admin bootstrap --username operator
+  PYTHONPATH=src "$PYTHON" -m helix.admin bootstrap --username operator
   echo
 fi
 
-echo "Trading Console → http://localhost:$PORT   (sign in as 'operator')"
+echo "Helix → http://localhost:$PORT   (sign in as 'operator')"
 exec env PYTHONPATH=src "$PYTHON" -m uvicorn \
-  tradingbot.service.main:create_service_app --factory --port "$PORT"
+  helix.service.main:create_service_app --factory --port "$PORT"

@@ -9,7 +9,7 @@ both `pull_request` to `main` **and** `push` to `main`):
 | Check | Workflow | Enforces |
 |-------|----------|----------|
 | `tests (3.11)`, `tests (3.12)`, `tests (3.13)` | `tests.yml` | pytest + branch-coverage floor |
-| `typecheck` | `typecheck.yml` | pyright over `src/tradingbot` + `tests` |
+| `typecheck` | `typecheck.yml` | pyright over `src/helix` + `tests` |
 | `ui` | `ui.yml` | UI typecheck, lint, format, vitest |
 | `analyze`, `Analyze (javascript-typescript)` | `codeql.yml` | CodeQL (Python + JS/TS) |
 | `bandit` / `Bandit` | `bandit.yml` | Python security scan |
@@ -35,7 +35,7 @@ satisfy `requirements.txt` fails the resolution and therefore the build.
 
 ## Coverage floor
 
-`tests.yml` runs `pytest --cov=tradingbot --cov-branch --cov-fail-under=85`, so a
+`tests.yml` runs `pytest --cov=helix --cov-branch --cov-fail-under=85`, so a
 drop below 85% branch coverage fails CI with a per-file diff (`term-missing`).
 The floor is a **ratchet**: when coverage rises comfortably above it, raise the
 number in `tests.yml` to lock in the gain. `coverage.xml` and JUnit
@@ -55,7 +55,7 @@ weekly schedule:
 
 | Scanner | Workflow | Policy |
 |---------|----------|--------|
-| Bandit `1.9.4` | `bandit.yml` | Static analysis of `src/tradingbot` at medium severity **and** confidence; a finding fails the build (no `exit_zero`). |
+| Bandit `1.9.4` | `bandit.yml` | Static analysis of `src/helix` at medium severity **and** confidence; a finding fails the build (no `exit_zero`). |
 | pip-audit `2.10.1` | `security.yml` | Audits `constraints.txt`; a new advisory fails the build. |
 | npm audit | `security.yml` | Fails on `high`+ advisories in `ui/`. |
 

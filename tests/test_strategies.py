@@ -7,9 +7,9 @@ from collections.abc import Sequence
 import pytest
 
 from doubles import EmptyMarketData
-from tradingbot.models import Candle, Signal
-from tradingbot.strategies.base import Strategy, StrategyContext
-from tradingbot.strategies.registry import (
+from helix.models import Candle, Signal
+from helix.strategies.base import Strategy, StrategyContext
+from helix.strategies.registry import (
     available_strategies,
     build_strategy,
     strategy,
@@ -41,7 +41,7 @@ class _FactoryStrategy:
 
 def test_package_import_discovers_example_strategy() -> None:
     """Verify that the example strategy is discoverable via the package-level API."""
-    import tradingbot.strategies as strategies
+    import helix.strategies as strategies
 
     assert "example" in strategies.available_strategies()
 

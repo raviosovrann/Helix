@@ -37,12 +37,12 @@ Measured on `main` @ `043abbe`:
 
 | Where | What it does now | Issue |
 |---|---|---|
-| [`risk.py:75`](../src/tradingbot/service/risk.py) | Adds *requested* notional on any `ok` result, including `dry_run`. No per-bot cumulative — two 60-notional orders both pass a 100 cap. `close_position()` bypasses exposure release entirely. | #110 |
-| [`ccxt.py:117`](../src/tradingbot/venues/ccxt.py) | Spot `get_position()` returns the **entire account base-asset balance** as this bot's position, `entry_price=0.0`. `close_position()` sells all of it. | #128 |
-| [`supervisor.py:751`](../src/tradingbot/service/supervisor.py) | Persists every `OrderEvent` to `trades` — dry-run, rejected, and submitted-unfilled included. The UI calls them trades. | #135 |
-| [`supervisor.py:359`](../src/tradingbot/service/supervisor.py) | `contract_multiplier` is optional on the venue protocol; ccxt has none, so derivatives silently get `1.0`. | #124 |
-| [`router.py:88`](../src/tradingbot/router.py) | Maps `Action.sell` straight to `Side.sell` and never reads `Signal.position_side`. Spot is long-only in practice but nothing says so. | #125 |
-| [`ccxt.py:139`](../src/tradingbot/venues/ccxt.py) | `close_position()` always sends `Side.sell`; `place_order()` drops `reduce_only` before calling `create_order()`. | #121 |
+| [`risk.py:75`](../src/helix/service/risk.py) | Adds *requested* notional on any `ok` result, including `dry_run`. No per-bot cumulative — two 60-notional orders both pass a 100 cap. `close_position()` bypasses exposure release entirely. | #110 |
+| [`ccxt.py:117`](../src/helix/venues/ccxt.py) | Spot `get_position()` returns the **entire account base-asset balance** as this bot's position, `entry_price=0.0`. `close_position()` sells all of it. | #128 |
+| [`supervisor.py:751`](../src/helix/service/supervisor.py) | Persists every `OrderEvent` to `trades` — dry-run, rejected, and submitted-unfilled included. The UI calls them trades. | #135 |
+| [`supervisor.py:359`](../src/helix/service/supervisor.py) | `contract_multiplier` is optional on the venue protocol; ccxt has none, so derivatives silently get `1.0`. | #124 |
+| [`router.py:88`](../src/helix/router.py) | Maps `Action.sell` straight to `Side.sell` and never reads `Signal.position_side`. Spot is long-only in practice but nothing says so. | #125 |
+| [`ccxt.py:139`](../src/helix/venues/ccxt.py) | `close_position()` always sends `Side.sell`; `place_order()` drops `reduce_only` before calling `create_order()`. | #121 |
 
 So the build order is not the issue order. The ledger comes first and the rest
 is computed from it.
@@ -92,7 +92,7 @@ Build the descriptor once, in #124, and extend it in #125.
 | **#124** | Resolve contract size, linear/inverse, quote currency and tick metadata from each venue's instrument metadata. Cached with an explicit refresh policy. Unknown or ambiguous derivative → bot fails validation/start. Never `1.0` by default. |
 | **#125** | Venue capabilities (long/short, order types, reduce-only, market types, symbol rules, position mode) and strategy requirements. Validated at create **and** start. Router validates action against requested position side and current position. Spot short signals rejected before submission. UI cannot offer an unsupported pair. |
 
-Note: `Strategy` ([`strategies/base.py`](../src/tradingbot/strategies/base.py))
+Note: `Strategy` ([`strategies/base.py`](../src/helix/strategies/base.py))
 currently declares nothing but `on_bar`. #125 adds the requirements side of the
 contract to it.
 

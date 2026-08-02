@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.models import Action, OrderType, PositionSide, Signal
-from tradingbot.venues.capabilities import (
+from helix.models import Action, OrderType, PositionSide, Signal
+from helix.venues.capabilities import (
     CapabilityError,
     StrategyRequirements,
     VenueCapabilities,

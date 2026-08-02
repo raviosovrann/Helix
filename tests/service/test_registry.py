@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import pytest
 
-import tradingbot.service.registry as registry
+import helix.service.registry as registry
 from doubles import EmptyMarketData
-from tradingbot.service.registry import (
+from helix.service.registry import (
     available_strategies,
     available_venues,
     build_strategy,
     build_venue,
 )
-from tradingbot.strategies import StrategyContext
-from tradingbot.venues.ccxt import CcxtVenue
-from tradingbot.venues.paper import PaperVenue
-from tradingbot.venues.tradovate import TradovateVenue
+from helix.strategies import StrategyContext
+from helix.venues.ccxt import CcxtVenue
+from helix.venues.paper import PaperVenue
+from helix.venues.tradovate import TradovateVenue
 
 
 def _context() -> StrategyContext:
@@ -243,7 +243,7 @@ class TestVenueCapabilities:
     """Every supported venue pair must declare what it can do (#125)."""
 
     def test_every_supported_pair_has_capabilities(self):
-        from tradingbot.service.registry import available_venues, venue_capabilities
+        from helix.service.registry import available_venues, venue_capabilities
 
         for mapping in available_venues():
             caps = venue_capabilities(mapping["venue"], mapping["market_type"])
@@ -251,30 +251,30 @@ class TestVenueCapabilities:
             assert caps.market_type == mapping["market_type"]
 
     def test_spot_cannot_short(self):
-        from tradingbot.service.registry import venue_capabilities
+        from helix.service.registry import venue_capabilities
 
         assert venue_capabilities("coinbase", "spot").supports_short is False
 
     def test_futures_can_short(self):
-        from tradingbot.service.registry import venue_capabilities
+        from helix.service.registry import venue_capabilities
 
         assert venue_capabilities("coinbase", "futures").supports_short is True
         assert venue_capabilities("tradovate", "futures").supports_short is True
 
     def test_spot_cannot_guarantee_reduce_only(self):
-        from tradingbot.service.registry import venue_capabilities
+        from helix.service.registry import venue_capabilities
 
         assert venue_capabilities("coinbase", "spot").supports_reduce_only is False
 
     def test_an_unsupported_pair_is_refused(self):
-        from tradingbot.service.registry import venue_capabilities
+        from helix.service.registry import venue_capabilities
 
         with pytest.raises(ValueError, match="Unsupported venue mapping"):
             venue_capabilities("nope", "spot")
 
     def test_available_venues_advertises_capabilities_for_the_ui(self):
         """The UI cannot filter what the API does not tell it (#125)."""
-        from tradingbot.service.registry import available_venues
+        from helix.service.registry import available_venues
 
         spot = next(
             m for m in available_venues()
@@ -291,7 +291,7 @@ class TestVenueBuildersCarryCapabilities:
         return {"api_key": "k", "api_secret": "s"}
 
     def test_a_built_ccxt_venue_knows_its_capabilities(self, monkeypatch):
-        from tradingbot.service.registry import build_venue
+        from helix.service.registry import build_venue
 
         built = {}
 
@@ -300,7 +300,7 @@ class TestVenueBuildersCarryCapabilities:
             return object()
 
         monkeypatch.setattr(
-            "tradingbot.venues.ccxt.CcxtVenue.from_exchange",
+            "helix.venues.ccxt.CcxtVenue.from_exchange",
             classmethod(_capture),
         )
         build_venue("coinbase", "futures", creds=self._creds(), live=False)
@@ -310,7 +310,7 @@ class TestVenueBuildersCarryCapabilities:
         assert caps.supports_reduce_only is True
 
     def test_a_spot_venue_is_told_it_cannot_reduce_only(self, monkeypatch):
-        from tradingbot.service.registry import build_venue
+        from helix.service.registry import build_venue
 
         built = {}
 
@@ -319,7 +319,7 @@ class TestVenueBuildersCarryCapabilities:
             return object()
 
         monkeypatch.setattr(
-            "tradingbot.venues.ccxt.CcxtVenue.from_exchange",
+            "helix.venues.ccxt.CcxtVenue.from_exchange",
             classmethod(_capture),
         )
         build_venue("coinbase", "spot", creds=self._creds(), live=False)

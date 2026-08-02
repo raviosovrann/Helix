@@ -11,9 +11,9 @@ from typing import Any
 
 import pytest
 
-import tradingbot.service.store as store_module
-from tradingbot.service.store import BotStore
-from tradingbot.service.supervisor import BotConfig
+import helix.service.store as store_module
+from helix.service.store import BotStore
+from helix.service.supervisor import BotConfig
 
 
 def _config(bot_id: str = "bot-1") -> BotConfig:

@@ -1,21 +1,21 @@
-"""``tradingbot`` admin CLI: first-run bootstrap and user management.
+"""``helix`` admin CLI: first-run bootstrap and user management.
 
 Replaces hand-editing ``users.json``. Passwords are read interactively with
 hidden confirmation and are never accepted as command-line arguments (which
 would leak into shell history and process listings). Every change goes through
-the transactional :class:`~tradingbot.service.store.BotStore`, invalidates
+the transactional :class:`~helix.service.store.BotStore`, invalidates
 affected sessions, and is written to the audit trail.
 
 Usage::
 
-    tradingbot bootstrap --username admin
-    tradingbot user add --username op [--admin]
-    tradingbot user list
-    tradingbot user disable --username op
-    tradingbot user reset-password --username op
-    tradingbot user revoke-sessions --username op
+    helix bootstrap --username admin
+    helix user add --username op [--admin]
+    helix user list
+    helix user disable --username op
+    helix user reset-password --username op
+    helix user revoke-sessions --username op
 
-The data directory is ``TRADINGBOT_DATA_DIR`` (default ``data``).
+The data directory is ``HELIX_DATA_DIR`` (default ``data``).
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ import sys
 import uuid
 from collections.abc import Callable, Sequence
 
+from .config import env
 from .service.audit import AuditLog
 from .service.auth import WeakPasswordError, check_password_policy, hash_password
 from .service.principal import Principal
@@ -194,8 +195,8 @@ def cmd_user_revoke_sessions(
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Build the ``tradingbot`` argument parser."""
-    parser = argparse.ArgumentParser(prog="tradingbot", description="Trading console admin CLI")
+    """Build the ``helix`` argument parser."""
+    parser = argparse.ArgumentParser(prog="helix", description="Trading console admin CLI")
     sub = parser.add_subparsers(dest="command", required=True)
 
     bootstrap = sub.add_parser("bootstrap", help="create the first administrator (one-time)")
@@ -246,7 +247,7 @@ def main(
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
-    resolved_dir = data_dir or os.environ.get("TRADINGBOT_DATA_DIR", "data")
+    resolved_dir = data_dir or env("DATA_DIR", "data")
     store = BotStore(resolved_dir)
     sessions = SessionStore(store)
     audit = AuditLog(store)

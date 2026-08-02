@@ -21,7 +21,7 @@ import threading
 
 import pytest
 
-from tradingbot.service.exposure import ExposureTracker
+from helix.service.exposure import ExposureTracker
 
 
 @pytest.fixture

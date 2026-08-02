@@ -85,9 +85,9 @@ export function Landing() {
       <header className="landing-nav">
         <a className="landing-brand" href="#top">
           <span className="brand" aria-hidden="true">
-            TC
+            H
           </span>
-          Trading Console
+          Helix
         </a>
         <nav className="landing-links" aria-label="Sections">
           <a href="#how">How it works</a>
@@ -186,8 +186,8 @@ export function Landing() {
 
       <footer className="landing-footer">
         <p className="muted">
-          Trading Console — execution infrastructure, not investment advice. Trading carries risk,
-          including loss of capital.
+          Helix — execution infrastructure, not investment advice. Trading carries risk, including
+          loss of capital.
         </p>
       </footer>
     </div>

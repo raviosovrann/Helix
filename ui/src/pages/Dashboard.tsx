@@ -66,9 +66,9 @@ export function Dashboard() {
       <header className="topbar">
         <h1>
           <span className="brand" aria-hidden="true">
-            TC
+            H
           </span>
-          Trading Console
+          Helix
         </h1>
         <nav className="button-row">
           <Link to="/bots/new" className="button-link primary">

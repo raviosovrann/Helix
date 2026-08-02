@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.ratelimit import RateLimiter
+from helix.service.ratelimit import RateLimiter
 
 
 @pytest.mark.asyncio

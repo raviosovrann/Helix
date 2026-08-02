@@ -1,4 +1,4 @@
-// Types mirroring the FastAPI service (src/tradingbot/service/dto.py).
+// Types mirroring the FastAPI service (src/helix/service/dto.py).
 // Single source of truth for the API shape; keep in sync with the backend.
 
 export interface Position {

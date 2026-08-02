@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from tradingbot.coinbase_feed import CoinbaseCandleFeed, CoinbaseStreamFeed
+from helix.coinbase_feed import CoinbaseCandleFeed, CoinbaseStreamFeed
 
 
 class _FakeResponse:
@@ -334,7 +334,7 @@ class TestCoinbaseRequestLimits:
 
     def test_four_hour_is_supported(self) -> None:
         """FOUR_HOUR is a real Coinbase granularity and must be usable."""
-        from tradingbot.coinbase_feed import bucket_seconds, granularity
+        from helix.coinbase_feed import bucket_seconds, granularity
 
         assert granularity("4h") == "FOUR_HOUR"
         assert bucket_seconds("4h") == 14_400

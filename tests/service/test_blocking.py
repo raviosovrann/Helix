@@ -8,7 +8,7 @@ import time
 
 import pytest
 
-from tradingbot.service.blocking import BlockingCallTimeout, BlockingCalls, WorkerPools
+from helix.service.blocking import BlockingCallTimeout, BlockingCalls, WorkerPools
 
 
 @pytest.mark.asyncio

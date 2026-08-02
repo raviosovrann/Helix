@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.auth import (
+from helix.service.auth import (
     MIN_PASSWORD_LENGTH,
     WeakPasswordError,
     check_password_policy,

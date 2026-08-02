@@ -1,7 +1,7 @@
 """Tests for the CCXT REST candle feed."""
 
-from tradingbot.datafeed import CcxtCandleFeed
-from tradingbot.models import Candle
+from helix.datafeed import CcxtCandleFeed
+from helix.models import Candle
 
 
 class _FakeExchange:

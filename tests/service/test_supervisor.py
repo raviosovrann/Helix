@@ -7,12 +7,12 @@ import json
 
 import pytest
 
-from tradingbot.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
-from tradingbot.service.events import EventBus, OrderEvent
-from tradingbot.router import SignalRouter
-from tradingbot.service.exposure import ExposureTracker
-from tradingbot.service.supervisor import BotConfig, BotSupervisor
-from tradingbot.strategies import DataRequirements
+from helix.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
+from helix.service.events import EventBus, OrderEvent
+from helix.router import SignalRouter
+from helix.service.exposure import ExposureTracker
+from helix.service.supervisor import BotConfig, BotSupervisor
+from helix.strategies import DataRequirements
 
 
 def _candle(ts: int = 1, close: float = 100.0) -> Candle:
@@ -134,8 +134,8 @@ async def test_supervisor_start_stop_and_order_event(monkeypatch) -> None:
     """Verify that the supervisor can start/stop a bot and emits an order event."""
     hub = _FakeHub()
     bus = EventBus()
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *args, **kwargs: _FakeVenue())
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", lambda *args, **kwargs: _SignalStrategy())
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *args, **kwargs: _FakeVenue())
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", lambda *args, **kwargs: _SignalStrategy())
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: hub,
         event_bus=bus,
@@ -214,10 +214,10 @@ async def test_multi_timeframe_strategy_runs_through_the_supervisor(monkeypatch)
         built.append(strategy)
         return strategy
 
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", _build)
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", _build)
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.strategy_data_requirements",
+        "helix.service.supervisor.strategy_data_requirements",
         lambda name: _MultiTimeframeStrategy.data_requirements,
     )
     supervisor = BotSupervisor(
@@ -267,8 +267,8 @@ async def test_supervisor_persists_order_events(monkeypatch) -> None:
     """Order events are appended to the store, not only published to the bus."""
     bus = EventBus()
     store = _RecordingStore()
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(),
         event_bus=bus,
@@ -391,8 +391,8 @@ def test_flat_position_zeroes_pnl() -> None:
 async def test_two_bots_run_concurrently(monkeypatch) -> None:
     """Verify that two bots can start and run concurrently."""
     hubs = {}
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *args, **kwargs: _FakeVenue())
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", lambda *args, **kwargs: _SignalStrategy())
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *args, **kwargs: _FakeVenue())
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", lambda *args, **kwargs: _SignalStrategy())
 
     def make_hub(cfg: BotConfig) -> _FakeHub:
         hubs[cfg.id] = _FakeHub()
@@ -498,8 +498,8 @@ class _SlowHub(_FakeHub):
 
 
 def _lifecycle_supervisor(monkeypatch, hub_factory) -> BotSupervisor:
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
     return BotSupervisor(
         hub_factory=hub_factory,
         event_bus=EventBus(),
@@ -598,8 +598,8 @@ async def test_failed_start_releases_resources_and_allows_retry(monkeypatch) -> 
             raise RuntimeError("strategy params rejected")
         return _SignalStrategy()
 
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", flaky_strategy)
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", flaky_strategy)
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: hub,
         event_bus=EventBus(),
@@ -670,10 +670,10 @@ def _recording_supervisor(monkeypatch, seen: dict) -> BotSupervisor:
         seen["global_cap"] = kwargs.get("global_cap")
         return real_guard(venue, **kwargs)
 
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", record_venue)
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", record_strategy)
+    monkeypatch.setattr("helix.service.supervisor.build_venue", record_venue)
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", record_strategy)
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.SignalRouter.with_risk_guard", staticmethod(record_guard)
+        "helix.service.supervisor.SignalRouter.with_risk_guard", staticmethod(record_guard)
     )
     return BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(),
@@ -770,7 +770,7 @@ class _NoMetadataVenue(_FakeVenue):
     """A derivative venue that cannot describe its own contract (#124)."""
 
     def contract_spec(self, symbol: str):
-        from tradingbot.venues.contracts import ContractMetadataError
+        from helix.venues.contracts import ContractMetadataError
         raise ContractMetadataError(f"{symbol}: contract size is not known")
 
 
@@ -779,7 +779,7 @@ class _SpecVenue(_FakeVenue):
         self._size = size
 
     def contract_spec(self, symbol: str):
-        from tradingbot.venues.contracts import ContractSpec
+        from helix.venues.contracts import ContractSpec
         return ContractSpec(
             symbol=symbol, contract_size=self._size, linear=True,
             quote_currency="USD", settle_currency="USD", tick_size=None,
@@ -801,13 +801,13 @@ def _futures_config(bot_id: str) -> BotConfig:
 @pytest.mark.asyncio
 async def test_a_derivative_without_metadata_refuses_to_start(monkeypatch) -> None:
     """#124's headline: never trade a derivative on a guessed multiplier."""
-    from tradingbot.venues.contracts import ContractMetadataError
+    from helix.venues.contracts import ContractMetadataError
 
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue", lambda *a, **k: _NoMetadataVenue()
+        "helix.service.supervisor.build_venue", lambda *a, **k: _NoMetadataVenue()
     )
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
+        "helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
     )
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(), event_bus=EventBus(),
@@ -826,13 +826,13 @@ async def test_a_derivative_without_metadata_refuses_to_start(monkeypatch) -> No
 @pytest.mark.asyncio
 async def test_a_derivative_venue_that_cannot_describe_contracts_refuses(monkeypatch) -> None:
     """A venue with no contract_spec at all is refused for derivatives."""
-    from tradingbot.venues.contracts import ContractMetadataError
+    from helix.venues.contracts import ContractMetadataError
 
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue", lambda *a, **k: _SilentVenue()
+        "helix.service.supervisor.build_venue", lambda *a, **k: _SilentVenue()
     )
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
+        "helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
     )
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(), event_bus=EventBus(),
@@ -848,10 +848,10 @@ async def test_a_derivative_venue_that_cannot_describe_contracts_refuses(monkeyp
 async def test_spot_starts_without_a_venue_lookup(monkeypatch) -> None:
     """Spot needs no metadata: one unit is one unit of the base asset."""
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue", lambda *a, **k: _SilentVenue()
+        "helix.service.supervisor.build_venue", lambda *a, **k: _SilentVenue()
     )
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
+        "helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
     )
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(), event_bus=EventBus(),
@@ -872,10 +872,10 @@ async def test_spot_starts_without_a_venue_lookup(monkeypatch) -> None:
 async def test_the_resolved_contract_size_becomes_the_multiplier(monkeypatch) -> None:
     """The number the venue reported is the number risk uses."""
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue", lambda *a, **k: _SpecVenue(0.1)
+        "helix.service.supervisor.build_venue", lambda *a, **k: _SpecVenue(0.1)
     )
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
+        "helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
     )
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(), event_bus=EventBus(),
@@ -901,13 +901,13 @@ async def test_a_strategy_that_outgrew_its_venue_refuses_to_start(monkeypatch) -
     passed and cannot be re-run; only the start-time check stands between that
     bot and a venue that cannot express its trades.
     """
-    from tradingbot.venues.capabilities import CapabilityError, StrategyRequirements
+    from helix.venues.capabilities import CapabilityError, StrategyRequirements
 
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue()
+        "helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue()
     )
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
+        "helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
     )
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(), event_bus=EventBus(),
@@ -916,7 +916,7 @@ async def test_a_strategy_that_outgrew_its_venue_refuses_to_start(monkeypatch) -
     supervisor.create(_config("one"))  # spot, and valid at this moment
 
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.strategy_requirements",
+        "helix.service.supervisor.strategy_requirements",
         lambda name: StrategyRequirements(requires_short=True),
     )
 
@@ -931,10 +931,10 @@ async def test_a_strategy_that_outgrew_its_venue_refuses_to_start(monkeypatch) -
 @pytest.mark.asyncio
 async def test_a_compatible_strategy_still_starts(monkeypatch) -> None:
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue()
+        "helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue()
     )
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
+        "helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
     )
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(), event_bus=EventBus(),

@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..config import env
 from .crypto import decrypt
 from .store import BotStore
 
@@ -45,7 +46,7 @@ class Check:
 
 def is_production() -> bool:
     """Return whether the service is configured to run in production mode."""
-    return os.environ.get("TRADINGBOT_ENV", "").strip().lower() == "production"
+    return env("ENV").strip().lower() == "production"
 
 
 def check_storage(store: BotStore) -> Check:
@@ -70,11 +71,11 @@ def check_storage(store: BotStore) -> Check:
 def check_secrets_key(store: BotStore) -> Check:
     """Verify the secrets key is present and still decrypts stored secrets.
 
-    A rotated or wrong ``TRADINGBOT_SECRETS_KEY`` would otherwise surface only
+    A rotated or wrong ``HELIX_SECRETS_KEY`` would otherwise surface only
     when a bot tries to start and finds no credentials ("key continuity").
     """
-    if not os.environ.get("TRADINGBOT_SECRETS_KEY", "").strip():
-        return Check(False, "TRADINGBOT_SECRETS_KEY is not set")
+    if not env("SECRETS_KEY").strip():
+        return Check(False, "HELIX_SECRETS_KEY is not set")
     secrets_file = Path(store.data_dir) / "secrets.json"
     if not secrets_file.is_file():
         return Check(True, "secrets key present (no secrets stored yet)")
@@ -125,12 +126,12 @@ def validate_startup(store: BotStore) -> list[str]:
         # A production deployment must sit behind a TLS-terminating proxy whose
         # forwarded host/proto we trust; serving without it would issue session
         # cookies over plaintext.
-        if not os.environ.get("TRADINGBOT_ALLOWED_ORIGINS", "").strip():
+        if not env("ALLOWED_ORIGINS").strip():
             problems.append(
-                "TRADINGBOT_ALLOWED_ORIGINS: must list the operator origin(s) in production"
+                "HELIX_ALLOWED_ORIGINS: must list the operator origin(s) in production"
             )
-        if os.environ.get("TRADINGBOT_COOKIE_SECURE", "").strip().lower() in ("0", "false", "no", "off"):
-            problems.append("TRADINGBOT_COOKIE_SECURE: must not be disabled in production")
+        if env("COOKIE_SECURE").strip().lower() in ("0", "false", "no", "off"):
+            problems.append("HELIX_COOKIE_SECURE: must not be disabled in production")
         if problems:
             raise StartupError(
                 "refusing to start in production with an unsafe configuration: "

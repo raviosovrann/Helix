@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from tradingbot.models import Candle
-from tradingbot.stream import CcxtStreamFeed, StreamingNotSupported
+from helix.models import Candle
+from helix.stream import CcxtStreamFeed, StreamingNotSupported
 
 
 def _row(ts, close=1.0):

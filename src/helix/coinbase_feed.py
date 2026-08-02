@@ -306,7 +306,7 @@ class TradeAggregator:
 class CoinbaseCandleFeed:
     """Historical candles over Coinbase's public market-data REST endpoint.
 
-    Implements the :class:`~tradingbot.datafeed.CandleFeed` protocol. No
+    Implements the :class:`~helix.datafeed.CandleFeed` protocol. No
     credentials: the ``/market/products`` surface is unauthenticated, which is
     what lets a bot warm up without any key configured.
     """
@@ -410,7 +410,7 @@ class CoinbaseCandleFeed:
 class CoinbaseStreamFeed:
     """Live candles aggregated from Coinbase's ``market_trades`` channel.
 
-    Implements the :class:`~tradingbot.stream.StreamingFeed` protocol, including
+    Implements the :class:`~helix.stream.StreamingFeed` protocol, including
     the per-symbol lifecycle #112 requires: each symbol runs its own connection
     and can be stopped without disturbing the others.
 

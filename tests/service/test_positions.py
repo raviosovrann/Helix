@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.ledger import OrderLedger
-from tradingbot.service.positions import SpotPosition, spot_position
+from helix.service.ledger import OrderLedger
+from helix.service.positions import SpotPosition, spot_position
 
 
 def _buy(coid: str, qty: float, price: float, *, ts: int = 1, fee: float = 0.0) -> list[dict]:
@@ -251,19 +251,19 @@ class _Venue:
         self.orders: list = []
 
     def place_order(self, order):
-        from tradingbot.models import OrderResult
+        from helix.models import OrderResult
         self.orders.append(order)
         return OrderResult(ok=True, order_id="v1", status="closed",
                            filled_qty=order.qty, raw={"average": 100.0})
 
     def close_position(self, symbol):
-        from tradingbot.models import OrderResult
+        from helix.models import OrderResult
         self.closed.append(symbol)
         return OrderResult(ok=True, order_id="c1", status="closed",
                            filled_qty=self.account_qty, raw={})
 
     def get_position(self, symbol):
-        from tradingbot.models import Position, PositionSide
+        from helix.models import Position, PositionSide
         if self.account_qty <= 0:
             return None
         return Position(symbol=symbol, side=PositionSide.long,
@@ -277,7 +277,7 @@ class TestSupervisorOwnership:
     """The bot's reported position must be its own, not the account's."""
 
     def _bot(self, account_qty: float, *event_groups):
-        from tradingbot.service.supervisor import BotConfig, BotInstance
+        from helix.service.supervisor import BotConfig, BotInstance
         cfg = BotConfig(
             id="bot-a", venue="coinbase", market_type="spot", strategy="example",
             symbol="BTC/USD", timeframe="1m", quantity=0.1, live=True,
@@ -292,7 +292,7 @@ class TestSupervisorOwnership:
 
     def test_a_bot_that_bought_nothing_reports_flat_despite_a_balance(self):
         """The account holds 10 BTC someone else bought. This bot owns none."""
-        from tradingbot.service.supervisor import BotSupervisor
+        from helix.service.supervisor import BotSupervisor
         bot = self._bot(10.0)
 
         BotSupervisor._refresh_position(None, bot)  # type: ignore[arg-type]
@@ -300,7 +300,7 @@ class TestSupervisorOwnership:
         assert bot.position is None or bot.position.size == 0.0
 
     def test_a_bot_reports_only_what_it_bought(self):
-        from tradingbot.service.supervisor import BotSupervisor
+        from helix.service.supervisor import BotSupervisor
         bot = self._bot(10.0, _buy("c1", 2.0, 100.0))
 
         BotSupervisor._refresh_position(None, bot)  # type: ignore[arg-type]
@@ -310,7 +310,7 @@ class TestSupervisorOwnership:
 
     def test_the_reported_entry_price_is_the_cost_basis(self):
         """Was hardcoded to 0.0, which made PnL the whole market value."""
-        from tradingbot.service.supervisor import BotSupervisor
+        from helix.service.supervisor import BotSupervisor
         bot = self._bot(10.0, _buy("c1", 2.0, 100.0))
 
         BotSupervisor._refresh_position(None, bot)  # type: ignore[arg-type]

@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from tradingbot.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
-from tradingbot.service.events import BotStateEvent, EventBus, EventSubscription
-from tradingbot.service.exposure import ExposureTracker
-from tradingbot.service.supervisor import BotConfig, BotSupervisor
+from helix.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
+from helix.service.events import BotStateEvent, EventBus, EventSubscription
+from helix.service.exposure import ExposureTracker
+from helix.service.supervisor import BotConfig, BotSupervisor
 
 
 def _candle(ts: int = 1, close: float = 100.0) -> Candle:
@@ -22,6 +22,7 @@ class _FakeHub:
     def __init__(self) -> None:
         self.handlers: dict[tuple[str, str], list] = {}
         self.listeners: list = []
+        self.recovery_listeners: list = []
         self.price: float | None = 100.0
 
     async def warmup(self, symbol: str, timeframe: str, limit: int) -> list[Candle]:
@@ -45,11 +46,22 @@ class _FakeHub:
         if listener in self.listeners:
             self.listeners.remove(listener)
 
+    def add_recovery_listener(self, listener) -> None:
+        self.recovery_listeners.append(listener)
+
+    def remove_recovery_listener(self, listener) -> None:
+        if listener in self.recovery_listeners:
+            self.recovery_listeners.remove(listener)
+
     def fire_stream_exit(
         self, symbol: str, timeframe: str, reason: str, permanent: bool = False
     ) -> None:
         for listener in tuple(self.listeners):
             listener(symbol, timeframe, reason, permanent)
+
+    def fire_stream_recovered(self, symbol: str, timeframe: str) -> None:
+        for listener in tuple(self.recovery_listeners):
+            listener(symbol, timeframe)
 
 
 class _FakeVenue:
@@ -58,7 +70,7 @@ class _FakeVenue:
 
     def contract_spec(self, symbol: str):
         """Derivative metadata (#124), so a futures bot can start."""
-        from tradingbot.venues.contracts import ContractSpec
+        from helix.venues.contracts import ContractSpec
         return ContractSpec(
             symbol=symbol, contract_size=1.0, linear=True, quote_currency="USD",
             settle_currency="USD", tick_size=None, is_derivative=True,
@@ -137,9 +149,9 @@ def _supervisor(
     strategy=None,
     poll_seconds: float = 60.0,
 ) -> BotSupervisor:
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: venue)
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: venue)
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy",
+        "helix.service.supervisor.build_strategy",
         lambda *a, **k: strategy if strategy is not None else _IdleStrategy(),
     )
     return BotSupervisor(
@@ -194,7 +206,7 @@ async def test_failed_start_publishes_failed_state(monkeypatch) -> None:
     hub, venue = _FakeHub(), _FakeVenue()
     supervisor = _supervisor(monkeypatch, hub=hub, venue=venue)
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue",
+        "helix.service.supervisor.build_venue",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("venue down")),
     )
     supervisor.create(_config())
@@ -388,3 +400,91 @@ async def test_a_transient_stream_failure_is_not_permanent(monkeypatch) -> None:
     assert events[0].degraded_permanent is False
     assert bot.degraded_permanent is False
     await supervisor.stop("bot-1")
+
+
+@pytest.mark.asyncio
+async def test_a_recovered_stream_clears_the_degraded_flag(monkeypatch) -> None:
+    """Verify a bot stops reporting degraded once its candles come back.
+
+    Streams reconnect now (#117), so degradation has to be able to clear
+    without a restart. Otherwise a single blip six hours into an overnight run
+    leaves the console showing a warning for the remaining eighteen.
+    """
+    hub, venue = _FakeHub(), _FakeVenue()
+    supervisor = _supervisor(monkeypatch, hub=hub, venue=venue)
+    bot = supervisor.create(_config())
+    await supervisor.start("bot-1")
+    hub.fire_stream_exit("BTC/USD", "1m", "connection reset")
+    assert bot.degraded is True
+    queue = supervisor.event_bus.subscribe()
+    published = bot.state_seq
+
+    hub.fire_stream_recovered("BTC/USD", "1m")
+
+    assert bot.degraded is False
+    assert bot.degraded_reason is None
+    assert bot.degraded_permanent is False
+    # Asserted on the sequence stamp rather than on what lands in the queue:
+    # draining needs a tick, and on that tick the runtime's own startup
+    # snapshot can arrive already carrying the cleared flag, which would let a
+    # recovery that was never broadcast look as though it had been.
+    assert bot.state_seq == published + 1, "the recovery was not broadcast"
+    recovered = [e for e in await _drain(queue) if not e.degraded]
+    assert recovered
+    assert recovered[0].seq == published + 1
+    assert recovered[0].status == "running"
+    await supervisor.stop("bot-1")
+
+
+@pytest.mark.asyncio
+async def test_recovery_for_another_symbol_does_not_clear_this_bot(monkeypatch) -> None:
+    """Verify a shared hub only clears the bots on the recovered symbol."""
+    hub, venue = _FakeHub(), _FakeVenue()
+    supervisor = _supervisor(monkeypatch, hub=hub, venue=venue)
+    bot = supervisor.create(_config())
+    await supervisor.start("bot-1")
+    hub.fire_stream_exit("BTC/USD", "1m", "connection reset")
+
+    hub.fire_stream_recovered("ETH/USD", "1m")
+
+    assert bot.degraded is True
+    await supervisor.stop("bot-1")
+
+
+@pytest.mark.asyncio
+async def test_a_permanent_failure_is_not_cleared_by_a_stray_recovery(monkeypatch) -> None:
+    """Verify a venue that cannot stream stays flagged (#170).
+
+    A permanent failure is never retried, so nothing should ever recover it.
+    Clearing it on a stray signal would tell the operator a bot is healthy
+    when it will never receive another bar.
+    """
+    hub, venue = _FakeHub(), _FakeVenue()
+    supervisor = _supervisor(monkeypatch, hub=hub, venue=venue)
+    bot = supervisor.create(_config())
+    await supervisor.start("bot-1")
+    hub.fire_stream_exit("BTC/USD", "1m", "coinbase cannot stream", permanent=True)
+
+    hub.fire_stream_recovered("BTC/USD", "1m")
+
+    assert bot.degraded is True
+    assert bot.degraded_permanent is True
+    await supervisor.stop("bot-1")
+
+
+@pytest.mark.asyncio
+async def test_stopping_unregisters_the_recovery_listener(monkeypatch) -> None:
+    """Verify a stopped bot leaves no recovery listener on the shared hub.
+
+    The hub outlives the bot; a listener left behind would mutate a stopped
+    bot's state when some other bot's stream recovered.
+    """
+    hub, venue = _FakeHub(), _FakeVenue()
+    supervisor = _supervisor(monkeypatch, hub=hub, venue=venue)
+    supervisor.create(_config())
+    await supervisor.start("bot-1")
+    assert hub.recovery_listeners != []
+
+    await supervisor.stop("bot-1")
+
+    assert hub.recovery_listeners == []
