@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from tradingbot.models import Signal, Action, OrderType, PositionSide
+from helix.models import Signal, Action, OrderType, PositionSide
 
 
 def _valid():

@@ -11,14 +11,14 @@ from collections.abc import Sequence
 
 import pytest
 
-from tradingbot.models import Action, Candle, PositionSide
-from tradingbot.strategies import DataRequirements, StrategyContext, build_strategy
-from tradingbot.strategies.registry import (
+from helix.models import Action, Candle, PositionSide
+from helix.strategies import DataRequirements, StrategyContext, build_strategy
+from helix.strategies.registry import (
     available_strategies,
     is_demo_strategy,
     strategy_data_requirements,
 )
-from tradingbot.strategies.scalp import TREND_HISTORY, TREND_TIMEFRAME, ScalpReversionStrategy
+from helix.strategies.scalp import TREND_HISTORY, TREND_TIMEFRAME, ScalpReversionStrategy
 
 _MINUTE = 60_000
 
@@ -118,7 +118,7 @@ def test_the_trading_timeframe_is_one_coinbase_actually_serves() -> None:
     Coinbase's REST granularities are a fixed set; ``3m`` is rejected outright,
     so a 3m scalper could not run on the only keyless data source there is.
     """
-    from tradingbot.coinbase_feed import bucket_seconds
+    from helix.coinbase_feed import bucket_seconds
 
     assert bucket_seconds("1m") == 60
     assert bucket_seconds(TREND_TIMEFRAME) == 900

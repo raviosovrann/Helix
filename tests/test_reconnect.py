@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from tradingbot.stream import (
+from helix.stream import (
     StreamingNotSupported,
     run_async_with_reconnect,
     run_with_reconnect,

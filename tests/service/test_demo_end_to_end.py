@@ -12,10 +12,10 @@ import asyncio
 
 import pytest
 
-from tradingbot.models import Candle
-from tradingbot.service.events import DecisionEvent, EventBus, OrderEvent
-from tradingbot.service.exposure import ExposureTracker
-from tradingbot.service.supervisor import BotConfig, BotSupervisor
+from helix.models import Candle
+from helix.service.events import DecisionEvent, EventBus, OrderEvent
+from helix.service.exposure import ExposureTracker
+from helix.service.supervisor import BotConfig, BotSupervisor
 
 
 def _candle(ts: int, close: float) -> Candle:

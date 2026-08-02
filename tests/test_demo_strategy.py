@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from doubles import EmptyMarketData
-from tradingbot.models import Action, Candle, PositionSide
-from tradingbot.strategies.base import StrategyContext
-from tradingbot.strategies.demo import DemoCrossoverStrategy
+from helix.models import Action, Candle, PositionSide
+from helix.strategies.base import StrategyContext
+from helix.strategies.demo import DemoCrossoverStrategy
 
 
 def _ctx(**params) -> StrategyContext:
@@ -165,6 +165,6 @@ def test_signal_names_the_strategy_unmistakably() -> None:
 
 def test_registered_under_a_name_that_cannot_be_mistaken() -> None:
     """Verify the registered name announces itself as a demo."""
-    from tradingbot.strategies import available_strategies
+    from helix.strategies import available_strategies
 
     assert "demo-crossover" in available_strategies()

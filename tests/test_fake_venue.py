@@ -1,7 +1,7 @@
 """Tests for the in-memory fake venue."""
 
 from doubles import FakeVenue
-from tradingbot.models import Order, PositionSide, Side, OrderType
+from helix.models import Order, PositionSide, Side, OrderType
 
 
 def test_buy_opens_long_then_close_flattens():

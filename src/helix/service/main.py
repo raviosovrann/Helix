@@ -1,4 +1,4 @@
-"""Default service entrypoint wiring for the Trading Console.
+"""Default service entrypoint wiring for the Helix.
 
 This module provides a zero-argument ``create_service_app`` factory suitable for
 running with uvicorn's ``--factory`` flag. It wires a file-based store and an
@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ..config import env
 from .api import create_app
 from .events import EventBus
 from .health import validate_startup
@@ -35,7 +36,7 @@ def create_service_app() -> Any:
     Returns:
         Configured FastAPI application.
     """
-    data_dir = Path(os.environ.get("TRADINGBOT_DATA_DIR", "data"))
+    data_dir = Path(env("DATA_DIR", "data"))
     store = BotStore(data_dir)
     # Fail closed in production; otherwise surface problems prominently so a
     # developer sees them instead of hitting a silent failure later.
@@ -47,8 +48,8 @@ def create_service_app() -> Any:
         exposure=ExposureTracker(),
         store=store,
     )
-    # Serve the built SPA from ui/dist (repo root) when present; TRADINGBOT_UI_DIST
+    # Serve the built SPA from ui/dist (repo root) when present; HELIX_UI_DIST
     # overrides the location.
     default_dist = Path(__file__).resolve().parents[3] / "ui" / "dist"
-    spa_dir = Path(os.environ.get("TRADINGBOT_UI_DIST", str(default_dist)))
+    spa_dir = Path(env("UI_DIST", str(default_dist)))
     return create_app(store=store, supervisor=supervisor, spa_dir=spa_dir)

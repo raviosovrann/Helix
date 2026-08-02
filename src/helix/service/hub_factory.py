@@ -57,7 +57,7 @@ def _default_feed_builder(venue: str, market_type: str, timeframe: str, creds: d
             raise ValueError(
                 "Tradovate market data needs creds['md_access_token'] (or "
                 "'mdAccessToken', from the Tradovate auth response). "
-                "See tradingbot.tradovate_feed."
+                "See helix.tradovate_feed."
             )
         # Share one MD client between the stream and candle feeds: the stream's
         # warmup feed is a TradovateCandleFeed wrapping the same client, so we

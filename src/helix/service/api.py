@@ -28,6 +28,7 @@ from ..stream import StreamingNotSupported
 from ..strategies import is_demo_strategy, strategy_requirements
 from ..venues.capabilities import CapabilityError, check_strategy
 from ..venues.contracts import ContractMetadataError
+from ..config import env
 from .audit import AuditLog
 from .auth import hash_password, needs_rehash, verify_password
 from .dto import (
@@ -374,14 +375,14 @@ def _audit(
 
 def _allowed_origins() -> set[str]:
     """Return the configured WebSocket origin allowlist from the environment."""
-    raw = os.environ.get("TRADINGBOT_ALLOWED_ORIGINS", "")
+    raw = env("ALLOWED_ORIGINS")
     return {o.strip() for o in raw.split(",") if o.strip()}
 
 
 def _origin_allowed(origin: str | None, host: str | None) -> bool:
     """Return whether a WebSocket ``origin`` may connect.
 
-    A configured allowlist (``TRADINGBOT_ALLOWED_ORIGINS``) is authoritative.
+    A configured allowlist (``HELIX_ALLOWED_ORIGINS``) is authoritative.
     With no allowlist, same-origin connections are accepted by comparing the
     Origin's host to the request ``Host`` header. A missing Origin is allowed:
     browsers always send it (so cross-site attempts are still rejected), while
@@ -400,11 +401,11 @@ def _origin_allowed(origin: str | None, host: str | None) -> bool:
 def _cookie_secure(request: Request) -> bool:
     """Return whether session cookies should carry the ``Secure`` flag.
 
-    ``TRADINGBOT_COOKIE_SECURE`` forces the flag on/off; otherwise it tracks the
+    ``HELIX_COOKIE_SECURE`` forces the flag on/off; otherwise it tracks the
     request scheme (``https`` behind a TLS-terminating proxy with forwarded
     headers), so cookies work over plain HTTP in local development and tests.
     """
-    override = os.environ.get("TRADINGBOT_COOKIE_SECURE", "").strip().lower()
+    override = env("COOKIE_SECURE").strip().lower()
     if override in ("1", "true", "yes", "on"):
         return True
     if override in ("0", "false", "no", "off"):
@@ -556,7 +557,7 @@ def create_app(
         # be parked in a hung exchange call, and shutdown must not inherit it.
         supervisor.shutdown_workers()
 
-    app = FastAPI(title="Trading Console", lifespan=lifespan)
+    app = FastAPI(title="Helix", lifespan=lifespan)
     app.state.store = store
     app.state.supervisor = supervisor
     app.state.sessions = SessionStore(store)

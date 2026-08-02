@@ -5,10 +5,10 @@ The maintained deployment artifact is the **container** (`Dockerfile` +
 filesystem and a single writable data volume.
 
 ```bash
-export TRADINGBOT_SECRETS_KEY="$(python -c 'from tradingbot.service.crypto import generate_key; print(generate_key())')"
-export TRADINGBOT_ALLOWED_ORIGINS="https://console.example.com"
+export HELIX_SECRETS_KEY="$(python -c 'from helix.service.crypto import generate_key; print(generate_key())')"
+export HELIX_ALLOWED_ORIGINS="https://console.example.com"
 docker compose up -d --build
-docker compose exec trading-console tradingbot bootstrap --username admin
+docker compose exec helix helix bootstrap --username admin
 ```
 
 ## Health probes
@@ -19,18 +19,18 @@ docker compose exec trading-console tradingbot bootstrap --username admin
 | `GET /readyz` | Readiness | `200` only when the data directory is writable **and** the secrets key decrypts stored secrets; otherwise `503` with per-dependency detail. |
 
 Route traffic on **`/readyz`**, not `/healthz`: a live process whose store is
-unwritable or whose `TRADINGBOT_SECRETS_KEY` is wrong must not receive requests.
+unwritable or whose `HELIX_SECRETS_KEY` is wrong must not receive requests.
 Both probes are unauthenticated and leak no configuration values.
 
 ## Startup validation
 
 At boot the service re-runs the readiness checks. With
-`TRADINGBOT_ENV=production` it **fails closed** (refuses to start) when:
+`HELIX_ENV=production` it **fails closed** (refuses to start) when:
 
 - the data directory is missing/unwritable, or the secrets key is absent or no
   longer decrypts stored secrets (key continuity);
-- `TRADINGBOT_ALLOWED_ORIGINS` is unset;
-- `TRADINGBOT_COOKIE_SECURE` is explicitly disabled.
+- `HELIX_ALLOWED_ORIGINS` is unset;
+- `HELIX_COOKIE_SECURE` is explicitly disabled.
 
 Outside production the same problems are logged as prominent errors.
 
@@ -55,7 +55,7 @@ add_header Referrer-Policy "no-referrer" always;
 add_header Content-Security-Policy "default-src 'self'; frame-ancestors 'none'" always;
 ```
 
-Set `TRADINGBOT_ALLOWED_ORIGINS` to exactly the operator origin(s); the
+Set `HELIX_ALLOWED_ORIGINS` to exactly the operator origin(s); the
 WebSocket rejects any other `Origin`.
 
 ## Resource limits and logs
@@ -80,29 +80,29 @@ All durable state is the single data volume: `bots.json`, `secrets.json`
 ```bash
 # Backup (quiesce first so no write is mid-flight)
 docker compose stop
-docker run --rm -v tradingbot_trading-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/tradingbot-backup.tgz -C /data .
+docker run --rm -v helix_helix-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/helix-backup.tgz -C /data .
 docker compose start
 
 # Restore
 docker compose down
-docker run --rm -v tradingbot_trading-data:/data -v "$PWD":/backup alpine \
-  sh -c "rm -rf /data/* && tar xzf /backup/tradingbot-backup.tgz -C /data"
+docker run --rm -v helix_helix-data:/data -v "$PWD":/backup alpine \
+  sh -c "rm -rf /data/* && tar xzf /backup/helix-backup.tgz -C /data"
 docker compose up -d
 ```
 
-**The backup is useless without `TRADINGBOT_SECRETS_KEY`** — `secrets.json` is
+**The backup is useless without `HELIX_SECRETS_KEY`** — `secrets.json` is
 encrypted with it. Store the key in a secret manager, separate from the backup.
 
 Run a **restore drill** quarterly: restore into a throwaway volume, start the
 service, and confirm `GET /readyz` returns `200` (which proves the key still
-decrypts the restored secrets) and that `tradingbot user list` shows the
+decrypts the restored secrets) and that `helix user list` shows the
 expected operators. The `deploy-smoke` CI job exercises the clean-install and
 backup/restore path automatically on every change.
 
 ## Key rotation
 
-`TRADINGBOT_SECRETS_KEY` cannot be swapped in isolation — the old key is needed
+`HELIX_SECRETS_KEY` cannot be swapped in isolation — the old key is needed
 to read existing secrets:
 
 1. Back up the data volume (above).
@@ -113,5 +113,5 @@ to read existing secrets:
    "secrets key cannot decrypt" means continuity was broken; roll back to the
    old key and retry.
 
-Rotate operator credentials with `tradingbot user reset-password`, which also
+Rotate operator credentials with `helix user reset-password`, which also
 revokes that user's active sessions.

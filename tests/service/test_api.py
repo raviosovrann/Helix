@@ -15,20 +15,20 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from tradingbot.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
-from tradingbot.service.api import create_app
-from tradingbot.service.auth import hash_password
-from tradingbot.service.events import (
+from helix.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
+from helix.service.api import create_app
+from helix.service.auth import hash_password
+from helix.service.events import (
     BotStateEvent,
     DecisionEvent,
     EventBus,
     OrderEvent,
     OverflowEvent,
 )
-from tradingbot.service.exposure import ExposureTracker
-from tradingbot.service.store import BotStore
-from tradingbot.stream import StreamingNotSupported
-from tradingbot.service.supervisor import BotConfig, BotSupervisor
+from helix.service.exposure import ExposureTracker
+from helix.service.store import BotStore
+from helix.stream import StreamingNotSupported
+from helix.service.supervisor import BotConfig, BotSupervisor
 
 _TOKEN = "test-token"
 _TOKEN_HASH = hashlib.sha256(_TOKEN.encode()).hexdigest()
@@ -124,8 +124,8 @@ def _store(tmp_path: Path) -> BotStore:
 
 
 def _supervisor(monkeypatch: pytest.MonkeyPatch) -> BotSupervisor:
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
     return BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(),
         event_bus=EventBus(),
@@ -339,7 +339,7 @@ class TestLogin:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A weak-iteration stored hash is upgraded on successful login."""
-        from tradingbot.service.auth import hash_password as hp, needs_rehash
+        from helix.service.auth import hash_password as hp, needs_rehash
 
         data_dir = tmp_path / "data"
         data_dir.mkdir()
@@ -361,7 +361,7 @@ class TestLogin:
     ) -> None:
         """An unknown username verifies against a real PBKDF2 hash, not the empty
         short-circuit, so login timing does not leak which usernames exist."""
-        import tradingbot.service.api as api_mod
+        import helix.service.api as api_mod
 
         seen: list[str] = []
         original = api_mod.verify_password
@@ -507,7 +507,7 @@ class TestProbes:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """An unusable dependency makes readiness fail closed with 503."""
-        monkeypatch.delenv("TRADINGBOT_SECRETS_KEY", raising=False)
+        monkeypatch.delenv("HELIX_SECRETS_KEY", raising=False)
         response = client.get("/readyz")
         assert response.status_code == 503
         assert response.json()["ready"] is False
@@ -804,7 +804,7 @@ class TestBotLifecycle:
         def _raise(*a: object, **k: object) -> None:
             raise ValueError("bad creds")
 
-        monkeypatch.setattr("tradingbot.service.supervisor.build_venue", _raise)
+        monkeypatch.setattr("helix.service.supervisor.build_venue", _raise)
         bot = self._create(client)
         response = client.post(f"/api/bots/{bot['id']}/start", headers=_auth())
         assert response.status_code == 400
@@ -1175,7 +1175,7 @@ class TestVenueErrorSurfacing:
                 '{"msg": "Service unavailable from a restricted location"}'
             )
 
-        monkeypatch.setattr("tradingbot.service.supervisor.build_venue", _boom)
+        monkeypatch.setattr("helix.service.supervisor.build_venue", _boom)
         _login(client)
         response = client.post(f"/api/bots/{bot_id}/start", headers=_csrf(client))
 
@@ -1202,7 +1202,7 @@ class TestVenueErrorSurfacing:
                 "?api_key=LEAKED_KEY_VALUE&signature=LEAKED_SIGNATURE 401"
             )
 
-        monkeypatch.setattr("tradingbot.service.supervisor.build_venue", _boom)
+        monkeypatch.setattr("helix.service.supervisor.build_venue", _boom)
         _login(client)
         response = client.post(f"/api/bots/{bot_id}/start", headers=_csrf(client))
 
@@ -1220,7 +1220,7 @@ class TestVenueErrorSurfacing:
 
         bot_id = self._bot(client)
         monkeypatch.setattr(
-            "tradingbot.service.supervisor.build_venue",
+            "helix.service.supervisor.build_venue",
             lambda *a, **k: (_ for _ in ()).throw(ccxt.RateLimitExceeded("too many requests")),
         )
         _login(client)
@@ -1234,7 +1234,7 @@ class TestVenueErrorSurfacing:
         """Our own faults must not be disguised as venue problems."""
         bot_id = self._bot(client)
         monkeypatch.setattr(
-            "tradingbot.service.supervisor.build_venue",
+            "helix.service.supervisor.build_venue",
             lambda *a, **k: (_ for _ in ()).throw(TypeError("bug in our own code")),
         )
         _login(client)
@@ -1258,7 +1258,7 @@ class TestUnsupportedVenue:
                 "coinbase does not support watchOHLCV, so it cannot stream candles."
             )
 
-        monkeypatch.setattr("tradingbot.service.supervisor.build_venue", _boom)
+        monkeypatch.setattr("helix.service.supervisor.build_venue", _boom)
         _login(client)
         response = client.post(f"/api/bots/{bot_id}/start", headers=_csrf(client))
 
@@ -1275,7 +1275,7 @@ class TestUnsupportedVenue:
         This is the change most likely to stop a bot someone was relying on,
         so the message has to name the instrument and the missing fact.
         """
-        from tradingbot.venues.contracts import ContractMetadataError
+        from helix.venues.contracts import ContractMetadataError
 
         bot_id = TestBotLifecycle()._create(client)["id"]
 
@@ -1285,7 +1285,7 @@ class TestUnsupportedVenue:
                 "cannot be computed; refusing rather than assuming 1.0"
             )
 
-        monkeypatch.setattr("tradingbot.service.supervisor.build_venue", _boom)
+        monkeypatch.setattr("helix.service.supervisor.build_venue", _boom)
         _login(client)
         response = client.post(f"/api/bots/{bot_id}/start", headers=_csrf(client))
 
@@ -1448,8 +1448,8 @@ class TestWebSocketEvents:
 
 def _supervisor_with_store(monkeypatch: pytest.MonkeyPatch, store: BotStore) -> BotSupervisor:
     """A supervisor wired to ``store`` so it can restore persisted bots."""
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
-    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
+    monkeypatch.setattr("helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy())
     return BotSupervisor(
         hub_factory=lambda cfg: _FakeHub(),
         event_bus=EventBus(),
@@ -1568,9 +1568,9 @@ class TestLifecycleConcurrency:
     def _app_and_supervisor(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         """Build an app whose bots all share one hub, so duplicate runtimes show up."""
         store = _store(tmp_path)
-        monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
+        monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
         monkeypatch.setattr(
-            "tradingbot.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
+            "helix.service.supervisor.build_strategy", lambda *a, **k: _SignalStrategy()
         )
         hub = _FakeHub()
         supervisor = BotSupervisor(
@@ -1753,10 +1753,10 @@ class TestCapabilityValidation:
     def test_a_strategy_needing_short_is_refused_on_spot(
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from tradingbot.venues.capabilities import StrategyRequirements
+        from helix.venues.capabilities import StrategyRequirements
 
         monkeypatch.setattr(
-            "tradingbot.service.api.strategy_requirements",
+            "helix.service.api.strategy_requirements",
             lambda name: StrategyRequirements(requires_short=True),
         )
 
@@ -1773,10 +1773,10 @@ class TestCapabilityValidation:
         self, client: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A rejected pairing must leave no orphan record."""
-        from tradingbot.venues.capabilities import StrategyRequirements
+        from helix.venues.capabilities import StrategyRequirements
 
         monkeypatch.setattr(
-            "tradingbot.service.api.strategy_requirements",
+            "helix.service.api.strategy_requirements",
             lambda name: StrategyRequirements(requires_short=True),
         )
         before = len(client.get("/api/bots", headers=_auth()).json())

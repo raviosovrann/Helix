@@ -6,10 +6,10 @@ import asyncio
 
 import pytest
 
-from tradingbot.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
-from tradingbot.service.events import BotStateEvent, EventBus, EventSubscription
-from tradingbot.service.exposure import ExposureTracker
-from tradingbot.service.supervisor import BotConfig, BotSupervisor
+from helix.models import Action, Candle, Order, OrderResult, OrderType, Position, PositionSide, Signal
+from helix.service.events import BotStateEvent, EventBus, EventSubscription
+from helix.service.exposure import ExposureTracker
+from helix.service.supervisor import BotConfig, BotSupervisor
 
 
 def _candle(ts: int = 1, close: float = 100.0) -> Candle:
@@ -70,7 +70,7 @@ class _FakeVenue:
 
     def contract_spec(self, symbol: str):
         """Derivative metadata (#124), so a futures bot can start."""
-        from tradingbot.venues.contracts import ContractSpec
+        from helix.venues.contracts import ContractSpec
         return ContractSpec(
             symbol=symbol, contract_size=1.0, linear=True, quote_currency="USD",
             settle_currency="USD", tick_size=None, is_derivative=True,
@@ -149,9 +149,9 @@ def _supervisor(
     strategy=None,
     poll_seconds: float = 60.0,
 ) -> BotSupervisor:
-    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: venue)
+    monkeypatch.setattr("helix.service.supervisor.build_venue", lambda *a, **k: venue)
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy",
+        "helix.service.supervisor.build_strategy",
         lambda *a, **k: strategy if strategy is not None else _IdleStrategy(),
     )
     return BotSupervisor(
@@ -206,7 +206,7 @@ async def test_failed_start_publishes_failed_state(monkeypatch) -> None:
     hub, venue = _FakeHub(), _FakeVenue()
     supervisor = _supervisor(monkeypatch, hub=hub, venue=venue)
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue",
+        "helix.service.supervisor.build_venue",
         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("venue down")),
     )
     supervisor.create(_config())

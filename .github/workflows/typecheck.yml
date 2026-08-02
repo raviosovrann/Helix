@@ -27,4 +27,4 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -c constraints.txt
       - name: Run pyright
-        run: pyright src/tradingbot tests
+        run: pyright src/helix tests

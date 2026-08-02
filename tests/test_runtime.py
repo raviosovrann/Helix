@@ -1,9 +1,9 @@
 """Tests for the bot runtime run loop."""
 
 from doubles import InMemoryCandleFeed
-from tradingbot.models import Action, Candle, OrderResult, OrderType, PositionSide, Signal
-from tradingbot.router import SignalRouter
-from tradingbot.runtime import CandleProcessor
+from helix.models import Action, Candle, OrderResult, OrderType, PositionSide, Signal
+from helix.router import SignalRouter
+from helix.runtime import CandleProcessor
 
 
 class StubStrategy:

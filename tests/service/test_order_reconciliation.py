@@ -13,11 +13,11 @@ import asyncio
 
 import pytest
 
-from tradingbot.models import Candle, Order, OrderResult, Position
-from tradingbot.service.events import EventBus
-from tradingbot.service.ledger import OrderState
-from tradingbot.service.exposure import ExposureTracker
-from tradingbot.service.supervisor import BotConfig, BotSupervisor
+from helix.models import Candle, Order, OrderResult, Position
+from helix.service.events import EventBus
+from helix.service.ledger import OrderState
+from helix.service.exposure import ExposureTracker
+from helix.service.supervisor import BotConfig, BotSupervisor
 
 
 def _candle(ts: int = 1, close: float = 100.0) -> Candle:
@@ -84,7 +84,7 @@ class _NoFetchVenue(_AckOnlyVenue):
 class _Strategy:
     def on_bar(self, candles):
         del candles
-        from tradingbot.models import Action, OrderType, PositionSide, Signal
+        from helix.models import Action, OrderType, PositionSide, Signal
         return Signal(
             strategy="s", action=Action.buy, symbol="BTC/USD",
             order_type=OrderType.market, quantity=0.1,
@@ -110,10 +110,10 @@ def _config(bot_id: str = "one") -> BotConfig:
 
 async def _started(monkeypatch, venue, store, *, exposure=None) -> BotSupervisor:
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_venue", lambda *a, **k: venue
+        "helix.service.supervisor.build_venue", lambda *a, **k: venue
     )
     monkeypatch.setattr(
-        "tradingbot.service.supervisor.build_strategy", lambda *a, **k: _Strategy()
+        "helix.service.supervisor.build_strategy", lambda *a, **k: _Strategy()
     )
     supervisor = BotSupervisor(
         hub_factory=lambda cfg: _Hub(),

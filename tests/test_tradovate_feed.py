@@ -2,8 +2,8 @@
 
 from typing import Any
 
-from tradingbot.models import Candle
-from tradingbot.tradovate_feed import TradovateCandleFeed, TradovateStreamFeed
+from helix.models import Candle
+from helix.tradovate_feed import TradovateCandleFeed, TradovateStreamFeed
 
 
 def _row(ts, close=1.0):

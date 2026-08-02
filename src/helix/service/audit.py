@@ -2,7 +2,7 @@
 
 Records who did what, when, and with what outcome for safety-critical events
 (authentication, credential changes, bot lifecycle, live-mode toggles, risk
-limits). Records are hash-chained by :class:`~tradingbot.service.store.BotStore`
+limits). Records are hash-chained by :class:`~helix.service.store.BotStore`
 so tampering is detectable, and every payload passes through a redaction step so
 secrets, passwords, session ids, and tokens never enter the log.
 

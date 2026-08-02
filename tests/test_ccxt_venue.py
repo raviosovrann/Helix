@@ -2,8 +2,8 @@
 
 import pytest
 
-from tradingbot.models import Order, OrderType, PositionSide, Side
-from tradingbot.venues.ccxt import CcxtVenue
+from helix.models import Order, OrderType, PositionSide, Side
+from helix.venues.ccxt import CcxtVenue
 
 
 class _FakeExchange:
@@ -366,7 +366,7 @@ def test_contract_spec_resolves_a_derivative_from_venue_metadata():
 
 def test_contract_spec_refuses_a_derivative_with_no_published_size():
     """#124's core: never silently 1.0 for a derivative."""
-    from tradingbot.venues.contracts import ContractMetadataError
+    from helix.venues.contracts import ContractMetadataError
 
     market = {**_PERP_MARKET, "contractSize": None}
     venue = CcxtVenue(
@@ -378,7 +378,7 @@ def test_contract_spec_refuses_a_derivative_with_no_published_size():
 
 
 def test_contract_spec_refuses_an_unlisted_symbol():
-    from tradingbot.venues.contracts import ContractMetadataError
+    from helix.venues.contracts import ContractMetadataError
 
     venue = CcxtVenue(_MarketExchange({}), live=True, market_type="futures")
 
@@ -572,7 +572,7 @@ class TestReduceOnlyFailsClosed:
     """A reduce-only order that cannot be guaranteed must not be sent."""
 
     def test_a_derivative_that_cannot_guarantee_reduce_only_is_refused(self):
-        from tradingbot.venues.capabilities import VenueCapabilities
+        from helix.venues.capabilities import VenueCapabilities
 
         exchange = _DerivExchange(_long_pos())
         venue = CcxtVenue(
@@ -593,7 +593,7 @@ class TestReduceOnlyFailsClosed:
         assert "reduce-only" in (result.error or "").lower()
 
     def test_a_non_reduce_only_order_is_unaffected(self):
-        from tradingbot.venues.capabilities import VenueCapabilities
+        from helix.venues.capabilities import VenueCapabilities
 
         exchange = _DerivExchange()
         venue = CcxtVenue(

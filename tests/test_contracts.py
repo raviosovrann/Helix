@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.venues.contracts import (
+from helix.venues.contracts import (
     ContractMetadataError,
     ContractSpec,
     spot_spec,

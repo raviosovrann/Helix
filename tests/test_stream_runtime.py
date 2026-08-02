@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from tradingbot.models import Action, Candle, OrderType, PositionSide, Signal
-from tradingbot.router import SignalRouter
-from tradingbot.runtime import StreamRuntime
+from helix.models import Action, Candle, OrderType, PositionSide, Signal
+from helix.router import SignalRouter
+from helix.runtime import StreamRuntime
 from doubles import FakeVenue
 
 

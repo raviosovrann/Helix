@@ -1,7 +1,7 @@
 """Tests for the in-memory candle feed doubles."""
 
 from doubles import InMemoryCandleFeed, normalize_candle
-from tradingbot.models import Candle
+from helix.models import Candle
 
 
 def test_normalize_candle_accepts_short_and_long_keys():

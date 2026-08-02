@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.venues.contracts import ContractMetadataError, ContractSpec
-from tradingbot.venues.ccxt_contracts import ContractCache, spec_from_market
+from helix.venues.contracts import ContractMetadataError, ContractSpec
+from helix.venues.ccxt_contracts import ContractCache, spec_from_market
 
 
 def _market(**overrides) -> dict:

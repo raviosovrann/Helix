@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.login_guard import LoginGuard, LoginLocked
+from helix.service.login_guard import LoginGuard, LoginLocked
 
 
 class _Clock:

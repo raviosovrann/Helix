@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.coinbase_feed import (
+from helix.coinbase_feed import (
     TradeAggregator,
     bucket_seconds,
     to_product_id,

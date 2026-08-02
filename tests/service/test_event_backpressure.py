@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from tradingbot.service.events import (
+from helix.service.events import (
     BotStateEvent,
     DecisionEvent,
     EventBus,

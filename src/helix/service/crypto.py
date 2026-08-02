@@ -2,22 +2,27 @@
 
 Credentials must never be stored in clear text. This wraps Fernet
 (AES-128-CBC + HMAC-SHA256) from ``cryptography`` with a key supplied via the
-``TRADINGBOT_SECRETS_KEY`` environment variable, so the operator controls the
+``HELIX_SECRETS_KEY`` environment variable, so the operator controls the
 key and it never lives next to the ciphertext. Generate one with
-``python -c "from tradingbot.service.crypto import generate_key; print(generate_key())"``.
+``python -c "from helix.service.crypto import generate_key; print(generate_key())"``.
+
+The pre-rename ``TRADINGBOT_SECRETS_KEY`` is still read (see ``helix.config``).
+That fallback matters more here than anywhere else: an absent key and a wrong
+key fail identically, so dropping the old name would have looked to an
+operator like their stored credentials had been corrupted.
 """
 
 from __future__ import annotations
 
-import os
-
 from cryptography.fernet import Fernet
 
-_ENV_KEY = "TRADINGBOT_SECRETS_KEY"
+from ..config import PREFIX, env
+
+_ENV_KEY = PREFIX + "SECRETS_KEY"
 
 
 def generate_key() -> str:
-    """Return a new base64 Fernet key suitable for ``TRADINGBOT_SECRETS_KEY``."""
+    """Return a new base64 Fernet key suitable for ``HELIX_SECRETS_KEY``."""
     return Fernet.generate_key().decode("ascii")
 
 
@@ -28,9 +33,9 @@ def _fernet() -> Fernet:
         A ``Fernet`` instance bound to the environment key.
 
     Raises:
-        RuntimeError: If ``TRADINGBOT_SECRETS_KEY`` is not set.
+        RuntimeError: If ``HELIX_SECRETS_KEY`` is not set.
     """
-    key = os.environ.get(_ENV_KEY, "").strip()
+    key = env("SECRETS_KEY").strip()
     if not key:
         raise RuntimeError(
             f"{_ENV_KEY} is not set; it is required to encrypt/decrypt secrets at rest"

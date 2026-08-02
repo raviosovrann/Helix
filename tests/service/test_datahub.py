@@ -7,9 +7,9 @@ from collections.abc import Callable
 
 import pytest
 
-from tradingbot.models import Candle
-from tradingbot.service.datahub import MarketDataHub
-from tradingbot.service.ratelimit import RateLimiter
+from helix.models import Candle
+from helix.service.datahub import MarketDataHub
+from helix.service.ratelimit import RateLimiter
 
 
 def _c(timestamp: int) -> Candle:

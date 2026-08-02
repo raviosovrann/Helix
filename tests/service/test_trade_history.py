@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tradingbot.service.store import BotStore
+from helix.service.store import BotStore
 
 
 def _record(n: int) -> dict[str, object]:

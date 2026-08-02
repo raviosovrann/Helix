@@ -5,7 +5,7 @@ test('operator can log in and create a dry-run bot', async ({ page }) => {
   await page.goto('/')
 
   // Redirected to login when unauthenticated.
-  await expect(page.getByRole('heading', { name: 'Trading Console' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Helix' })).toBeVisible()
   await page.getByLabel('Username').fill('operator')
   await page.getByLabel('Password').fill('e2e-pass')
   await page.getByRole('button', { name: 'Sign in' }).click()

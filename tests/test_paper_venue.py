@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.models import Order, OrderType, PositionSide, Side
-from tradingbot.venues.paper import PaperVenue
+from helix.models import Order, OrderType, PositionSide, Side
+from helix.venues.paper import PaperVenue
 
 
 def _venue(price: float | None = 100.0) -> PaperVenue:

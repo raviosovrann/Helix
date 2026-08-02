@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from tradingbot.service.hub_factory import HubFactory
-from tradingbot.service.supervisor import BotConfig
+from helix.service.hub_factory import HubFactory
+from helix.service.supervisor import BotConfig
 
 
 class _FakeStream:

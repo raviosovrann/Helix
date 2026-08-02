@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tradingbot.service.audit import AuditLog, redact
-from tradingbot.service.principal import Principal
-from tradingbot.service.store import BotStore
+from helix.service.audit import AuditLog, redact
+from helix.service.principal import Principal
+from helix.service.store import BotStore
 
 
 def _store(tmp_path: Path) -> BotStore:

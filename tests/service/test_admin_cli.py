@@ -1,4 +1,4 @@
-"""Tests for the tradingbot admin CLI (bootstrap + user management)."""
+"""Tests for the helix admin CLI (bootstrap + user management)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from tradingbot import admin
-from tradingbot.service.auth import verify_password
-from tradingbot.service.sessions import SessionStore
-from tradingbot.service.store import BotStore
+from helix import admin
+from helix.service.auth import verify_password
+from helix.service.sessions import SessionStore
+from helix.service.store import BotStore
 
 _STRONG = "correct-horse-battery-staple"
 

@@ -1,4 +1,4 @@
-# Trading Console
+# Helix
 
 A multi-bot trading service for internal operators. Runs many bots (multiple
 strategies, multiple markets) in a single FastAPI process, with a shared
@@ -70,29 +70,29 @@ The manual equivalent, and the environment variables involved, are below.
 Generate a secrets-encryption key (venue credentials are encrypted at rest):
 
 ```bash
-PYTHONPATH=src python -c "from tradingbot.service.crypto import generate_key; print(generate_key())"
-export TRADINGBOT_SECRETS_KEY=<the key>   # required whenever the service runs
+PYTHONPATH=src python -c "from helix.service.crypto import generate_key; print(generate_key())"
+export HELIX_SECRETS_KEY=<the key>   # required whenever the service runs
 ```
 
-Install the package to get the `tradingbot` admin CLI, then create the first
+Install the package to get the `helix` admin CLI, then create the first
 administrator. The CLI prompts for the password with hidden confirmation and
 writes `data/users.json` for you (owner-only permissions) — never hand-edit it:
 
 ```bash
-pip install -e .                       # provides the `tradingbot` command
-tradingbot bootstrap --username admin   # prompts for a password
+pip install -e .                       # provides the `helix` command
+helix bootstrap --username admin   # prompts for a password
 ```
 
 `bootstrap` is one-time and refuses once any user exists. Manage users later
-with `tradingbot user add|list|disable|reset-password|revoke-sessions`
-(`TRADINGBOT_DATA_DIR` selects the data directory, default `data`). For direct
+with `helix user add|list|disable|reset-password|revoke-sessions`
+(`HELIX_DATA_DIR` selects the data directory, default `data`). For direct
 API access, add a `token_hash` (SHA-256 of a pre-issued token) to a user record.
 
 Start the service (uses the default file-based store under `data/`):
 
 ```bash
-PYTHONPATH=src TRADINGBOT_SECRETS_KEY=<the key> \
-  uvicorn tradingbot.service.main:create_service_app --factory --host 0.0.0.0 --port 8000
+PYTHONPATH=src HELIX_SECRETS_KEY=<the key> \
+  uvicorn helix.service.main:create_service_app --factory --host 0.0.0.0 --port 8000
 ```
 
 The file store serializes writers across processes on one POSIX host and
@@ -163,12 +163,22 @@ Auth policy (internal-deployment defaults, all environment-tunable):
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `TRADINGBOT_SESSION_IDLE_TTL` | `1800` | Idle timeout (s) before a session expires. |
-| `TRADINGBOT_SESSION_ABSOLUTE_TTL` | `43200` | Absolute session lifetime (s). |
-| `TRADINGBOT_LOGIN_MAX_FAILURES` | `5` | Failed logins (per username **and** per IP) before lockout. |
-| `TRADINGBOT_LOGIN_LOCKOUT_SECONDS` | `300` | Lockout window (s); further attempts return `429`. |
-| `TRADINGBOT_ALLOWED_ORIGINS` | *(same-origin)* | Comma-separated WebSocket origin allowlist. |
-| `TRADINGBOT_COOKIE_SECURE` | *(auto)* | Force the cookie `Secure` flag; auto-derives from the request scheme. |
+| `HELIX_SESSION_IDLE_TTL` | `1800` | Idle timeout (s) before a session expires. |
+| `HELIX_SESSION_ABSOLUTE_TTL` | `43200` | Absolute session lifetime (s). |
+| `HELIX_LOGIN_MAX_FAILURES` | `5` | Failed logins (per username **and** per IP) before lockout. |
+| `HELIX_LOGIN_LOCKOUT_SECONDS` | `300` | Lockout window (s); further attempts return `429`. |
+| `HELIX_ALLOWED_ORIGINS` | *(same-origin)* | Comma-separated WebSocket origin allowlist. |
+| `HELIX_COOKIE_SECURE` | *(auto)* | Force the cookie `Secure` flag; auto-derives from the request scheme. |
+
+**Upgrading from before the rename.** Every setting used to be spelled
+`TRADINGBOT_*`. The old names are still read and log a deprecation warning
+once each, so an existing deployment keeps working untouched. `HELIX_*` wins
+when both are set, which makes the migration additive: add the new variable,
+confirm the service is healthy, then remove the old line. Two of these are
+worth doing deliberately rather than leaving to the fallback —
+`HELIX_SECRETS_KEY`, because an absent key and a wrong key fail identically,
+and `HELIX_DATA_DIR`, because losing it silently points the service at an
+empty `data/` with no bots in it.
 
 On a rotated or expired session, any `401` (or a `1008` WebSocket auth-close)
 centrally clears the SPA's auth state, closes the socket, drops cached data, and
@@ -200,7 +210,7 @@ passwords, session ids, and tokens never appear. Read them via admin-only
 
 - `WS /ws` — live decision, order, and position events. Authenticated by the
   session cookie sent on the upgrade (no token in the URL); the `Origin` must
-  pass the allowlist (`TRADINGBOT_ALLOWED_ORIGINS`, default same-origin).
+  pass the allowlist (`HELIX_ALLOWED_ORIGINS`, default same-origin).
 
 ---
 
@@ -210,7 +220,7 @@ The original single-bot CLI still works for quick testing:
 
 ```bash
 set -a; source .env; set +a
-PYTHONPATH=src python3 -m tradingbot
+PYTHONPATH=src python3 -m helix
 ```
 
 Environment variables:
@@ -230,15 +240,15 @@ Environment variables:
 
 ## Strategy plugins
 
-Add a strategy by dropping a file under `src/tradingbot/strategies/` and
+Add a strategy by dropping a file under `src/helix/strategies/` and
 decorating the class:
 
 ```python
 from __future__ import annotations
 from collections.abc import Sequence
-from tradingbot.models import Candle, Signal
-from tradingbot.strategies.base import StrategyContext
-from tradingbot.strategies.registry import strategy
+from helix.models import Candle, Signal
+from helix.strategies.base import StrategyContext
+from helix.strategies.registry import strategy
 
 @strategy("mystrategy")
 class MyStrategy:
@@ -259,8 +269,8 @@ It is automatically discovered and launchable by name from the API.
 source .venv/bin/activate
 pip install -r requirements.txt -c constraints.txt
 pytest -v                                                    # tests
-pytest --cov=tradingbot --cov-branch --cov-fail-under=85     # coverage + CI floor
-pyright --pythonpath .venv/bin/python src/tradingbot tests   # types
+pytest --cov=helix --cov-branch --cov-fail-under=85     # coverage + CI floor
+pyright --pythonpath .venv/bin/python src/helix tests   # types
 ```
 
 > Pass `--pythonpath` to pyright (or set `pythonPath` in `pyrightconfig.json`):
@@ -278,10 +288,10 @@ and push to `main`. Required checks and branch protection: [doc/ci.md](doc/ci.md
 
 ## File layout
 
-- `src/tradingbot/service/` — FastAPI service, supervisor, registry, risk,
+- `src/helix/service/` — FastAPI service, supervisor, registry, risk,
   data hub, rate limiter, event bus, store, and DTOs.
-- `src/tradingbot/strategies/` — plugin registry and reference strategy.
-- `src/tradingbot/venues/` — `ExecutionVenue` implementations.
-- `src/tradingbot/` — Phase 1 engine: runtime, router, models, feeds, stream.
+- `src/helix/strategies/` — plugin registry and reference strategy.
+- `src/helix/venues/` — `ExecutionVenue` implementations.
+- `src/helix/` — Phase 1 engine: runtime, router, models, feeds, stream.
 - `tests/` — unit and integration tests using fakes; no network or real
   credentials.

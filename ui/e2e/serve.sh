@@ -14,15 +14,15 @@ PY="python"
 [ -x "$REPO_ROOT/.venv/bin/python" ] && PY="$REPO_ROOT/.venv/bin/python"
 
 DATA_DIR="$(mktemp -d)"
-export TRADINGBOT_DATA_DIR="$DATA_DIR"
-export TRADINGBOT_UI_DIST="$REPO_ROOT/ui/dist"
+export HELIX_DATA_DIR="$DATA_DIR"
+export HELIX_UI_DIST="$REPO_ROOT/ui/dist"
 export PYTHONPATH="$REPO_ROOT/src"
-export TRADINGBOT_SECRETS_KEY="$($PY -c 'from tradingbot.service.crypto import generate_key; print(generate_key())')"
+export HELIX_SECRETS_KEY="$($PY -c 'from helix.service.crypto import generate_key; print(generate_key())')"
 
 # Seed one operator: username "operator", password "e2e-pass".
 $PY - "$DATA_DIR" <<'PY'
 import json, sys, pathlib
-from tradingbot.service.auth import hash_password
+from helix.service.auth import hash_password
 data = {"users": [{"username": "operator", "password_hash": hash_password("e2e-pass")}]}
 pathlib.Path(sys.argv[1], "users.json").write_text(json.dumps(data))
 PY
@@ -31,4 +31,4 @@ PY
 # stale bundle left over from an earlier build.
 (cd "$REPO_ROOT/ui" && npm run build)
 
-exec $PY -m uvicorn tradingbot.service.main:create_service_app --factory --host 127.0.0.1 --port 8000
+exec $PY -m uvicorn helix.service.main:create_service_app --factory --host 127.0.0.1 --port 8000

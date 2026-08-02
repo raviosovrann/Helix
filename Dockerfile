@@ -12,8 +12,8 @@ FROM python:3.13-slim AS runtime
 # Never write .pyc / buffer logs: logs must reach the collector immediately.
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TRADINGBOT_DATA_DIR=/data \
-    TRADINGBOT_UI_DIST=/app/ui/dist
+    HELIX_DATA_DIR=/data \
+    HELIX_UI_DIST=/app/ui/dist
 
 WORKDIR /app
 
@@ -29,11 +29,11 @@ COPY --from=ui-build /ui/dist ./ui/dist
 
 # Run as a non-root user that owns only the data volume. The application
 # filesystem itself can be mounted read-only (see docker-compose.yml).
-RUN useradd --system --uid 10001 --create-home --home-dir /home/tradingbot tradingbot \
+RUN useradd --system --uid 10001 --create-home --home-dir /home/helix helix \
     && mkdir -p /data \
-    && chown -R tradingbot:tradingbot /data \
+    && chown -R helix:helix /data \
     && chmod 700 /data
-USER tradingbot
+USER helix
 
 EXPOSE 8000
 
@@ -43,6 +43,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 
 # Exec form so uvicorn is PID 1 and receives SIGTERM directly, letting the
 # lifespan shutdown stop bots/streams before exit.
-CMD ["uvicorn", "tradingbot.service.main:create_service_app", "--factory", \
+CMD ["uvicorn", "helix.service.main:create_service_app", "--factory", \
      "--host", "0.0.0.0", "--port", "8000", \
      "--proxy-headers", "--forwarded-allow-ips", "*"]

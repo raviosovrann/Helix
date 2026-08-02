@@ -1,6 +1,6 @@
-# Trading Console — Operator & Developer Runbook
+# Helix — Operator & Developer Runbook
 
-The single reference for running, operating, and developing the Trading Console.
+The single reference for running, operating, and developing the Helix.
 Deployment specifics (container, proxy, backups, key rotation) live in
 [deployment.md](deployment.md); CI specifics in [ci.md](ci.md).
 
@@ -11,7 +11,7 @@ Deployment specifics (container, proxy, backups, key rotation) live in
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt -c constraints.txt
-pip install -e .                      # provides the `tradingbot` CLI
+pip install -e .                      # provides the `helix` CLI
 ```
 
 Generate the secrets-encryption key (venue credentials are encrypted at rest)
@@ -19,8 +19,8 @@ and keep it in a secret manager — **without it, stored credentials and backups
 are unreadable**:
 
 ```bash
-python -c "from tradingbot.service.crypto import generate_key; print(generate_key())"
-export TRADINGBOT_SECRETS_KEY='<the key>'   # required whenever the service runs
+python -c "from helix.service.crypto import generate_key; print(generate_key())"
+export HELIX_SECRETS_KEY='<the key>'   # required whenever the service runs
 ```
 
 Create the first administrator. The CLI prompts for the password with hidden
@@ -28,7 +28,7 @@ confirmation and writes `data/users.json` with owner-only permissions — never
 hand-edit that file, and never pass a password as an argument:
 
 ```bash
-tradingbot bootstrap --username admin
+helix bootstrap --username admin
 ```
 
 `bootstrap` is one-time: it refuses once any user exists.
@@ -37,11 +37,11 @@ tradingbot bootstrap --username admin
 
 | Command | Effect |
 |---------|--------|
-| `tradingbot user add --username op [--admin]` | Create an operator (or admin). |
-| `tradingbot user list` | Show username, roles, active/disabled, API-token presence. |
-| `tradingbot user disable --username op` | Disable the account **and revoke its sessions**. |
-| `tradingbot user reset-password --username op` | Set a new password **and revoke its sessions**. |
-| `tradingbot user revoke-sessions --username op` | Force re-login everywhere. |
+| `helix user add --username op [--admin]` | Create an operator (or admin). |
+| `helix user list` | Show username, roles, active/disabled, API-token presence. |
+| `helix user disable --username op` | Disable the account **and revoke its sessions**. |
+| `helix user reset-password --username op` | Set a new password **and revoke its sessions**. |
+| `helix user revoke-sessions --username op` | Force re-login everywhere. |
 
 Passwords must be at least 12 characters. A stored hash using stale PBKDF2
 parameters is transparently upgraded on the next successful login.
@@ -80,8 +80,8 @@ parameters is transparently upgraded on the next successful login.
 Two processes. Backend on `:8000`:
 
 ```bash
-PYTHONPATH=src TRADINGBOT_SECRETS_KEY='<the key>' \
-  uvicorn tradingbot.service.main:create_service_app --factory \
+PYTHONPATH=src HELIX_SECRETS_KEY='<the key>' \
+  uvicorn helix.service.main:create_service_app --factory \
   --host 127.0.0.1 --port 8000
 ```
 
@@ -96,12 +96,12 @@ npm run dev            # http://localhost:5173
 
 ```bash
 cd ui && npm run build         # emits ui/dist
-cd .. && PYTHONPATH=src TRADINGBOT_SECRETS_KEY='<the key>' \
-  uvicorn tradingbot.service.main:create_service_app --factory \
+cd .. && PYTHONPATH=src HELIX_SECRETS_KEY='<the key>' \
+  uvicorn helix.service.main:create_service_app --factory \
   --host 127.0.0.1 --port 8000
 ```
 
-The service serves `ui/dist` at `/` (override with `TRADINGBOT_UI_DIST`) with
+The service serves `ui/dist` at `/` (override with `HELIX_UI_DIST`) with
 SPA deep-link fallback, and the API under `/api`. This is one origin, so
 cookies and the WebSocket work without any proxy config.
 
@@ -557,13 +557,13 @@ written to a redacted, hash-chained audit trail readable by an admin at
 
 ## 5. Where things live, and watching logs
 
-With the default `TRADINGBOT_DATA_DIR=data` (directory `0700`, files `0600`):
+With the default `HELIX_DATA_DIR=data` (directory `0700`, files `0600`):
 
 | Path | Contents |
 |------|----------|
 | `data/users.json` | Operator records: id, username, password hash, roles, disabled flag, optional API-token hash. |
 | `data/sessions.json` | Live sessions (hashed ids only). |
-| `data/secrets.json` | Venue credentials, **encrypted** with `TRADINGBOT_SECRETS_KEY`. Never hand-edit. |
+| `data/secrets.json` | Venue credentials, **encrypted** with `HELIX_SECRETS_KEY`. Never hand-edit. |
 | `data/bots.json` | Bot configurations (credentials stripped). |
 | `data/trades/<bot_id>.jsonl` | Append-only trade/order events per bot. |
 | `data/audit.jsonl` | Append-only, hash-chained audit trail. |
@@ -572,7 +572,7 @@ With the default `TRADINGBOT_DATA_DIR=data` (directory `0700`, files `0600`):
 The service logs to stdout. Watch them where you started uvicorn, or:
 
 ```bash
-docker compose logs -f trading-console     # container
+docker compose logs -f helix     # container
 journalctl -u <your-unit> -f               # if wrapped in a systemd unit
 ```
 
@@ -589,18 +589,18 @@ secrets).
 
 | Variable | Default | Meaning |
 |----------|---------|---------|
-| `TRADINGBOT_SECRETS_KEY` | *(required)* | Fernet key encrypting venue credentials at rest. |
-| `TRADINGBOT_DATA_DIR` | `data` | Data directory. |
-| `TRADINGBOT_UI_DIST` | `ui/dist` | Built SPA to serve. |
-| `TRADINGBOT_ENV` | *(unset)* | `production` enables fail-closed startup validation. |
-| `TRADINGBOT_ALLOWED_ORIGINS` | *(same-origin)* | Comma-separated WebSocket origin allowlist. Required in production. |
-| `TRADINGBOT_COOKIE_SECURE` | *(auto)* | Force the cookie `Secure` flag; auto-derives from request scheme. |
-| `TRADINGBOT_SESSION_IDLE_TTL` | `1800` | Session idle timeout (s). |
-| `TRADINGBOT_SESSION_ABSOLUTE_TTL` | `43200` | Absolute session lifetime (s). |
-| `TRADINGBOT_LOGIN_MAX_FAILURES` | `5` | Failures (per username and per IP) before lockout. |
-| `TRADINGBOT_LOGIN_LOCKOUT_SECONDS` | `300` | Lockout window (s). |
+| `HELIX_SECRETS_KEY` | *(required)* | Fernet key encrypting venue credentials at rest. |
+| `HELIX_DATA_DIR` | `data` | Data directory. |
+| `HELIX_UI_DIST` | `ui/dist` | Built SPA to serve. |
+| `HELIX_ENV` | *(unset)* | `production` enables fail-closed startup validation. |
+| `HELIX_ALLOWED_ORIGINS` | *(same-origin)* | Comma-separated WebSocket origin allowlist. Required in production. |
+| `HELIX_COOKIE_SECURE` | *(auto)* | Force the cookie `Secure` flag; auto-derives from request scheme. |
+| `HELIX_SESSION_IDLE_TTL` | `1800` | Session idle timeout (s). |
+| `HELIX_SESSION_ABSOLUTE_TTL` | `43200` | Absolute session lifetime (s). |
+| `HELIX_LOGIN_MAX_FAILURES` | `5` | Failures (per username and per IP) before lockout. |
+| `HELIX_LOGIN_LOCKOUT_SECONDS` | `300` | Lockout window (s). |
 
-The single-bot CLI (`python -m tradingbot`) and its `EXCHANGE` / `API_KEY` /
+The single-bot CLI (`python -m helix`) and its `EXCHANGE` / `API_KEY` /
 `SYMBOL` / `STRATEGY` / `LIVE` environment variables were **removed in #177**.
 The web service is the only supported way to run a bot; create and start one
 through the console, which stores credentials encrypted rather than reading
@@ -608,7 +608,7 @@ them from the environment.
 
 ### Safe key and credential handling
 
-- Keep `TRADINGBOT_SECRETS_KEY` in a secret manager or the process environment —
+- Keep `HELIX_SECRETS_KEY` in a secret manager or the process environment —
   never in the repo, an image layer, or a backup archive.
 - Enter venue credentials through the UI wizard or
   `PUT /api/venues/{venue}/{market_type}/secrets`; they are encrypted at rest and
@@ -624,7 +624,7 @@ them from the environment.
 Read these before trusting the system with money:
 
 - **Tradovate market data is incomplete.** The Tradovate market-data client
-  still raises `NotImplementedError` (`src/tradingbot/tradovate_feed.py`), so
+  still raises `NotImplementedError` (`src/helix/tradovate_feed.py`), so
   Tradovate bots cannot receive candles. Tracked in #96. Coinbase spot via ccxt
   is the working path.
 - **The bundled `example` strategy is a no-op.** It implements the plugin
@@ -652,12 +652,12 @@ Python (from the repo root, venv active):
 
 ```bash
 pytest -v                                             # full suite
-pytest --cov=tradingbot --cov-branch \
+pytest --cov=helix --cov-branch \
        --cov-report=term-missing --cov-fail-under=85  # coverage + CI floor
-pyright --pythonpath .venv/bin/python src/tradingbot tests
+pyright --pythonpath .venv/bin/python src/helix tests
 ```
 
-> A bare `pyright src/tradingbot tests` may resolve against a different
+> A bare `pyright src/helix tests` may resolve against a different
 > interpreter and report spurious missing imports; pass `--pythonpath` (or set
 > `pythonPath` in `pyrightconfig.json`) so it uses the repo virtualenv.
 
