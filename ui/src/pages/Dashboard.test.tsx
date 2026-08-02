@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ApiClient } from '../api/client'
 import type { BotView, WsEvent } from '../types'
@@ -220,5 +220,40 @@ describe('Dashboard', () => {
     await userEvent.click(screen.getByRole('button', { name: /stop/i }))
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(client.stopBot).not.toHaveBeenCalled()
+  })
+})
+
+describe('sign out (#164 routing)', () => {
+  it('returns to the landing page, not the login form', async () => {
+    // A deliberate sign-out should show the product, not immediately ask the
+    // operator to sign back in. An *expired* session still routes to /login,
+    // which ProtectedRoute owns.
+    const client = {
+      getSession: vi.fn().mockResolvedValue({ username: 'op', roles: ['operator'] }),
+      listBots: vi.fn().mockResolvedValue([]),
+      logout: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ApiClient
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <AuthProvider client={client}>
+          <BotEventsProvider socketFactory={() => new FakeSocket()}>
+            <MemoryRouter initialEntries={['/dashboard']}>
+              <Routes>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/" element={<div>landing page</div>} />
+                <Route path="/login" element={<div>login form</div>} />
+              </Routes>
+            </MemoryRouter>
+          </BotEventsProvider>
+        </AuthProvider>
+      </QueryClientProvider>,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: /sign out/i }))
+
+    expect(await screen.findByText('landing page')).toBeInTheDocument()
+    expect(screen.queryByText('login form')).not.toBeInTheDocument()
+    expect(client.logout).toHaveBeenCalled()
   })
 })

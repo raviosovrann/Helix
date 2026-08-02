@@ -107,7 +107,7 @@ describe('NewBot wizard', () => {
   it('filters market types to the chosen venue', async () => {
     setup()
     // Wait for the venues query to populate the market select (coinbase default).
-    await screen.findByRole('option', { name: 'spot' })
+    await screen.findByRole('option', { name: 'Spot' })
     const market = () => screen.getByLabelText(/market/i) as HTMLSelectElement
     expect(Array.from(market().options).map((o) => o.value)).toEqual(['spot', 'futures'])
     // switch to paper → spot only (futures no longer offered)
@@ -241,7 +241,7 @@ describe('wizard field guidance (#164)', () => {
 
   it('gives a market-appropriate symbol example', async () => {
     setup()
-    await screen.findByRole('option', { name: 'futures' })
+    await screen.findByRole('option', { name: 'Futures' })
     await userEvent.selectOptions(screen.getByLabelText(/market type/i), 'futures')
     await next()
     await next()
@@ -277,5 +277,40 @@ describe('wizard field guidance (#164)', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /next/i })).toBeEnabled()
+  })
+})
+
+describe('display labels', () => {
+  it('capitalises venue and market names without changing the values sent', async () => {
+    // The label is prose; the value is a key the API routes on. Capitalising
+    // the value would break venue lookup on the server.
+    const { client } = setup()
+    await screen.findByRole('option', { name: 'Coinbase' })
+
+    const venueSelect = screen.getByLabelText(/venue/i) as HTMLSelectElement
+    const marketSelect = screen.getByLabelText(/market type/i) as HTMLSelectElement
+    expect(Array.from(venueSelect.options).map((o) => o.text)).toEqual([
+      'Coinbase',
+      'Paper',
+      'Tradovate',
+    ])
+    expect(Array.from(venueSelect.options).map((o) => o.value)).toEqual([
+      'coinbase',
+      'paper',
+      'tradovate',
+    ])
+    expect(Array.from(marketSelect.options).map((o) => o.text)).toEqual(['Spot', 'Futures'])
+
+    await next()
+    await next()
+    await userEvent.type(screen.getByLabelText(/symbol/i), 'BTC/USD')
+    await userEvent.type(screen.getByLabelText(/^API key/i), 'k')
+    await userEvent.type(screen.getByLabelText(/^API secret/i), 's')
+    await next()
+    await userEvent.click(screen.getByRole('button', { name: /create/i }))
+
+    expect(client.createBot).toHaveBeenCalledWith(
+      expect.objectContaining({ venue: 'coinbase', market_type: 'spot' }),
+    )
   })
 })

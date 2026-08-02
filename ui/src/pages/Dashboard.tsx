@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useBots, useStartBot, useStopBot } from '../api/hooks'
 import { BotTable } from '../components/BotTable'
@@ -8,6 +8,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useAuth } from '../hooks/useAuth'
 import { useBotEvents } from '../hooks/useBotEvents'
 import type { BotView } from '../types'
+import { venueLabel } from '../labels'
 
 interface PendingAction {
   /** Short action name; becomes the dialog's accessible name. */
@@ -20,6 +21,7 @@ interface PendingAction {
 /** Live table of all bots, updated over the WebSocket. */
 export function Dashboard() {
   const { logout } = useAuth()
+  const navigate = useNavigate()
   const { data: bots, isLoading, error } = useBots()
   const queryClient = useQueryClient()
   const startBot = useStartBot()
@@ -72,7 +74,16 @@ export function Dashboard() {
           <Link to="/bots/new" className="button-link primary">
             New bot
           </Link>
-          <button onClick={() => void logout()}>Sign out</button>
+          {/* Signing out deliberately returns to the landing page. An expired
+              session still goes to /login via ProtectedRoute, because there the
+              operator wants to get back in, not read about the product. */}
+          <button
+            onClick={() => {
+              void logout().then(() => navigate('/'))
+            }}
+          >
+            Sign out
+          </button>
         </nav>
       </header>
 
@@ -101,7 +112,7 @@ export function Dashboard() {
             setPending({
               title: `Start ${bot.symbol} in ${bot.live ? 'LIVE' : 'dry-run'} mode`,
               message: bot.live
-                ? `Real orders will be sent to ${bot.venue} and can move real money.`
+                ? `Real orders will be sent to ${venueLabel(bot.venue)} and can move real money.`
                 : 'Orders are logged only; nothing is sent to the venue.',
               run: () => startBot.mutateAsync(bot.id),
             })

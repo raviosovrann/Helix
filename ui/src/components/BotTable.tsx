@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import type { BotView } from '../types'
 import { LiveBadge } from './LiveBadge'
 import { BotStatusPill } from './StatusPill'
+import { marketLabel, venueLabel } from '../labels'
 
 function positionText(bot: BotView): string {
   const pos = bot.position
@@ -64,8 +65,8 @@ export function BotTable({
               <td>
                 <Link to={`/bots/${bot.id}`}>{bot.symbol}</Link>
               </td>
-              <td>{bot.venue}</td>
-              <td>{bot.market_type}</td>
+              <td>{venueLabel(bot.venue)}</td>
+              <td>{marketLabel(bot.market_type)}</td>
               <td>{bot.strategy}</td>
               <td>
                 <LiveBadge live={bot.live} />

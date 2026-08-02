@@ -10,6 +10,7 @@ import { BotStatusPill } from '../components/StatusPill'
 import { PnlSparkline } from '../components/PnlSparkline'
 import { useBotEvents } from '../hooks/useBotEvents'
 import type { BotView } from '../types'
+import { marketLabel, venueLabel } from '../labels'
 
 interface PendingAction {
   /** Short action name; becomes the dialog's accessible name. */
@@ -103,7 +104,7 @@ export function BotDetail() {
     if (checked) {
       setPending({
         title: `Enable LIVE trading for ${bot.symbol}`,
-        message: `Real orders will be sent to ${bot.venue} and can move real money.`,
+        message: `Real orders will be sent to ${venueLabel(bot.venue)} and can move real money.`,
         run: () => patchBot.mutateAsync({ live: true }),
       })
     } else {
@@ -164,7 +165,7 @@ export function BotDetail() {
                 setPending({
                   title: `Start ${bot.symbol} in ${bot.live ? 'LIVE' : 'dry-run'} mode`,
                   message: bot.live
-                    ? `Real orders will be sent to ${bot.venue} and can move real money.`
+                    ? `Real orders will be sent to ${venueLabel(bot.venue)} and can move real money.`
                     : 'Orders are logged only; nothing is sent to the venue.',
                   run: () => startBot.mutateAsync(bot.id),
                 })
@@ -180,9 +181,12 @@ export function BotDetail() {
               setPending({
                 title: `Delete ${bot.symbol}`,
                 message:
-                  `Its configuration is removed permanently from ${bot.venue}. ` +
+                  `Its configuration is removed permanently from ${venueLabel(bot.venue)}. ` +
                   'Recorded trades are archived, not deleted.',
-                run: () => deleteBot.mutateAsync(bot.id).then(() => navigate('/')),
+                // Back to the console, not to `/` — that is the public landing
+                // page now, and landing there after a delete looks exactly like
+                // having been signed out.
+                run: () => deleteBot.mutateAsync(bot.id).then(() => navigate('/dashboard')),
               })
             }
           >
@@ -197,7 +201,7 @@ export function BotDetail() {
           <dl className="config-list">
             <dt>Venue</dt>
             <dd>
-              {bot.venue} ({bot.market_type})
+              {venueLabel(bot.venue)} ({marketLabel(bot.market_type)})
             </dd>
             <dt>Strategy</dt>
             <dd>{bot.strategy}</dd>

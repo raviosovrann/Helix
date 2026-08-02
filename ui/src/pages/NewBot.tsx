@@ -4,6 +4,7 @@ import { useCreateBot, useStrategies, useVenues } from '../api/hooks'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { LiveBadge } from '../components/LiveBadge'
 import { useAuth } from '../hooks/useAuth'
+import { marketLabel, venueLabel } from '../labels'
 
 interface CredField {
   name: string
@@ -245,7 +246,7 @@ export function NewBot() {
             <select id="venue" value={venue} onChange={(e) => onVenueChange(e.target.value)}>
               {venueNames.map((v) => (
                 <option key={v} value={v}>
-                  {v}
+                  {venueLabel(v)}
                 </option>
               ))}
             </select>
@@ -253,7 +254,7 @@ export function NewBot() {
             <select id="market" value={marketType} onChange={(e) => setMarketType(e.target.value)}>
               {marketsForVenue.map((m) => (
                 <option key={m} value={m}>
-                  {m}
+                  {marketLabel(m)}
                 </option>
               ))}
             </select>
@@ -351,11 +352,11 @@ export function NewBot() {
               Same limit, across every bot you run. The lower of the two applies.
             </p>
 
-            <h2>{credFields.length === 0 ? 'Credentials' : `${venue} credentials`}</h2>
+            <h2>{credFields.length === 0 ? 'Credentials' : `${venueLabel(venue)} credentials`}</h2>
             {credFields.length === 0 ? (
               <p className="muted" data-testid="no-credentials-needed">
-                None needed. {venue} simulates its fills and never contacts an exchange account, so
-                it watches live prices without any API key.
+                None needed. {venueLabel(venue)} simulates its fills and never contacts an exchange
+                account, so it watches live prices without any API key.
               </p>
             ) : (
               <p className="muted">
@@ -379,7 +380,7 @@ export function NewBot() {
             <dl className="config-list">
               <dt>Venue</dt>
               <dd>
-                {venue} ({marketType})
+                {venueLabel(venue)} ({marketLabel(marketType)})
               </dd>
               <dt>Strategy</dt>
               <dd>{strategy}</dd>
@@ -408,9 +409,9 @@ export function NewBot() {
             </div>
             {!liveCapable && (
               <p className="muted" data-testid="live-unavailable">
-                {venue} cannot trade live: its fills are simulated, so any profit or position it
-                reports exists only in this console. Create a bot on a funded venue to trade for
-                real.
+                {venueLabel(venue)} cannot trade live: its fills are simulated, so any profit or
+                position it reports exists only in this console. Create a bot on a funded venue to
+                trade for real.
               </p>
             )}
             {error && (
@@ -445,7 +446,7 @@ export function NewBot() {
 
       <ConfirmDialog
         open={confirmLive}
-        message={`Create this bot in LIVE mode? It will send real orders to ${venue} once started.`}
+        message={`Create this bot in LIVE mode? It will send real orders to ${venueLabel(venue)} once started.`}
         onConfirm={() => {
           setLive(true)
           setConfirmLive(false)
