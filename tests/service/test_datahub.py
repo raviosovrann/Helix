@@ -511,8 +511,30 @@ async def _noop_sleep(_seconds: float) -> None:
     await asyncio.sleep(0)
 
 
-async def _settle(iterations: int = 40) -> None:
-    """Let queued stream/reconnect callbacks run without sleeping for real."""
+async def _until(predicate: Callable[[], bool], *, timeout: float = 5.0) -> None:
+    """Yield until ``predicate`` holds, failing on a wall-clock deadline.
+
+    Waiting a *fixed* number of event-loop yields instead looks equivalent and
+    is not: how many turns a reconnect cycle costs depends on the scheduler, so
+    a count tuned on a developer machine passes locally and fails on a loaded
+    CI runner. Both of the tests below were written that way and both failed in
+    CI, which is the second time this project has paid for it.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + timeout
+    while not predicate():
+        if loop.time() > deadline:
+            raise AssertionError(f"condition not reached within {timeout}s")
+        await asyncio.sleep(0)
+
+
+async def _quiesce(iterations: int = 200) -> None:
+    """Give the loop ample turns, for asserting that nothing *further* happens.
+
+    The complement of :func:`_until`: there is no event to wait for, so this is
+    generous rather than precise. It only ever produces a false *pass*, never a
+    false failure, so a big count is free.
+    """
     for _ in range(iterations):
         await asyncio.sleep(0)
 
@@ -547,7 +569,8 @@ async def test_stream_reconnects_after_a_clean_return() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", lambda candle: None)
-    await _settle()
+    await _until(lambda: len(stream.run_calls) >= 4)
+    await _quiesce()
 
     assert len(stream.run_calls) == 4, "expected three reconnects, then a live socket"
     hub.close()
@@ -573,7 +596,8 @@ async def test_stream_reconnects_after_an_exception() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", lambda candle: None)
-    await _settle()
+    await _until(lambda: len(stream.run_calls) >= 2)
+    await _quiesce()
 
     assert len(stream.run_calls) == 2
     hub.close()
@@ -596,10 +620,10 @@ async def test_unsubscribing_stops_the_reconnect_loop() -> None:
 
     handler = lambda candle: None
     hub.subscribe("BTC/USD", "1m", handler)
-    await _settle(4)
+    await _until(lambda: len(stream.run_calls) >= 2)  # it is genuinely reconnecting
     hub.unsubscribe("BTC/USD", "1m", handler)
     settled = len(stream.run_calls)
-    await _settle()
+    await _quiesce()
 
     assert len(stream.run_calls) == settled, "the feed was reopened after unsubscribe"
     hub.close()
@@ -638,7 +662,8 @@ async def test_a_permanent_failure_is_reported_once_and_not_retried() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", lambda candle: None)
-    await _settle()
+    await _until(lambda: len(seen) >= 1)
+    await _quiesce()
 
     assert len(stream.run_calls) == 1
     assert len(seen) == 1
@@ -670,7 +695,8 @@ async def test_bars_missed_during_an_outage_are_gap_filled() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", fetched.append)
-    await _settle()
+    await _until(lambda: len(fetched) >= 2)
+    await _quiesce()
 
     assert [candle.timestamp for candle in fetched] == [10, 20]
     hub.close()
@@ -703,7 +729,8 @@ async def test_gap_fill_bypasses_the_warmup_cache() -> None:
 
     await hub.warmup("BTC/USD", "1m", 50)  # primes the cache before the outage
     hub.subscribe("BTC/USD", "1m", received.append)
-    await _settle()
+    await _until(lambda: len(received) >= 1)
+    await _quiesce()
 
     assert [candle.timestamp for candle in received] == [200], "stale cache was replayed"
     hub.close()
@@ -734,7 +761,8 @@ async def test_a_reconnect_degrades_then_recovers_on_the_next_candle() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", lambda candle: None)
-    await _settle()
+    await _until(lambda: len(drops) >= 1)
+    await _quiesce()
     assert len(drops) == 1, "the outage itself should be reported"
     assert recoveries == [], "nothing has arrived yet, so nothing has recovered"
 
@@ -760,7 +788,8 @@ async def test_recovery_is_reported_once_per_outage() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", lambda candle: None)
-    await _settle()
+    await _until(lambda: len(stream.run_calls) >= 2)
+    await _quiesce()
     stream.emit("BTC/USD", _c(99))
     stream.emit("BTC/USD", _c(100))
     stream.emit("BTC/USD", _c(101))
@@ -785,7 +814,8 @@ async def test_a_healthy_stream_never_reports_a_recovery() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", lambda candle: None)
-    await _settle(4)
+    await _until(lambda: len(stream.run_calls) >= 1)
+    await _quiesce()
     stream.emit("BTC/USD", _c(99))
 
     assert recoveries == []
@@ -809,10 +839,10 @@ async def test_close_cancels_the_reconnect_loop() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", lambda candle: None)
-    await _settle(4)
+    await _until(lambda: len(stream.run_calls) >= 2)  # it is genuinely reconnecting
     hub.close()
     settled = len(stream.run_calls)
-    await _settle()
+    await _quiesce()
 
     assert len(stream.run_calls) == settled
     assert stream.stop_calls == 1
@@ -840,12 +870,11 @@ async def test_a_stream_with_no_subscribers_left_does_not_reconnect() -> None:
     )
 
     hub.subscribe("BTC/USD", "1m", lambda candle: None)
-    await _settle(4)
-    assert len(stream.run_calls) > 1, "the loop must be reconnecting to begin with"
+    await _until(lambda: len(stream.run_calls) > 1)  # the loop must be reconnecting
 
     hub._handlers.pop(("BTC/USD", "1m"))  # deliberately no task.cancel()
     settled = len(stream.run_calls)
-    await _settle()
+    await _quiesce()
 
     assert len(stream.run_calls) == settled
     hub.close()
