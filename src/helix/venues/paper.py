@@ -107,6 +107,7 @@ class PaperVenue:
             order_id=f"paper-{next(self._ids)}",
             status="filled",
             filled_qty=filled,
+            avg_price=price,
             raw={
                 "paper": True,
                 "avg_price": price,
@@ -153,6 +154,7 @@ class PaperVenue:
             order_id=f"paper-{next(self._ids)}",
             status="filled",
             filled_qty=filled,
+            avg_price=price,
             raw={"paper": True, "avg_price": price, "closing_order": True},
         )
 

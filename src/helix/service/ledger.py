@@ -528,6 +528,44 @@ individual exchanges leak ``cancelled`` through ``raw``.
 """
 
 
+def _fill_price(order: "Order | None", result: "OrderResult") -> float | None:
+    """Return the price a fill happened at, in order of authority.
+
+    Three sources, because no single one covers every venue:
+
+    1. ``result.avg_price`` — the typed field a venue sets when it knows the
+       price outright. It is first because it is the only one that is not a
+       guess.
+    2. ``raw["average"]`` — ccxt's own volume-weighted fill price. A live ccxt
+       result is the exchange response passed through verbatim, so this is
+       genuinely where the number lives for those venues.
+    3. ``order.price`` — the limit price. Only an estimate, and ``None`` on a
+       market order, but a far better one than zero: a fill recorded at zero
+       looks free and corrupts cost basis, realised PnL and exposure at once.
+
+    Reading only source 2 is what broke the paper venue: it wrote the price
+    under ``avg_price``, nothing read that key, and every paper market fill
+    fell through to a ``None`` limit price. Downstream, a priceless fill is
+    skipped rather than rejected, so the console showed a flat position and
+    zero PnL indefinitely and no test failed.
+
+    Args:
+        order: The submitted order, for its limit price. May be ``None`` where
+            the caller has only a poll result.
+        result: The venue's response.
+
+    Returns:
+        The best available fill price, or ``None`` when there is none.
+    """
+    typed = _coerce_float(result.avg_price)
+    if typed is not None and typed > 0:
+        return typed
+    reported = _coerce_float(result.raw.get("average")) if result.raw else None
+    if reported is not None and reported > 0:
+        return reported
+    return order.price if order is not None else None
+
+
 def events_from_result(
     order: "Order",
     result: "OrderResult",
@@ -585,13 +623,7 @@ def events_from_result(
 
     filled_qty = _coerce_float(result.filled_qty)
     if filled_qty is not None and filled_qty > _QTY_EPSILON:
-        # `average` is the venue's own volume-weighted fill price. It is absent
-        # on some exchanges, where a limit order's price is a far better
-        # estimate than zero -- zero would make the fill look free and corrupt
-        # cost basis downstream.
-        avg_price = _coerce_float(result.raw.get("average")) if result.raw else None
-        if avg_price is None or avg_price <= 0:
-            avg_price = order.price
+        avg_price = _fill_price(order, result)
         events.append({
             "kind": "order_status",
             "client_order_id": client_order_id,
@@ -695,12 +727,13 @@ def events_from_status(
     events: list[dict[str, Any]] = []
     filled_qty = _coerce_float(result.filled_qty)
     if filled_qty is not None and filled_qty > _QTY_EPSILON:
-        avg_price = _coerce_float(result.raw.get("average")) if result.raw else None
+        # No order to fall back on here — a poll knows the result, not the
+        # request — so this is the typed field or the venue's own `average`.
         events.append({
             "kind": "order_status",
             "client_order_id": client_order_id,
             "filled_qty": filled_qty,
-            "avg_price": avg_price,
+            "avg_price": _fill_price(None, result),
             "ts": ts,
         })
 
