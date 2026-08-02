@@ -1,6 +1,12 @@
 .env
 .env.*
 !.env.example
+
+# Local runtime state. `data/` holds user records (password hashes) and
+# encrypted venue credentials; `.secrets.key` is the key that decrypts them.
+# Committing either would put real credentials in the history.
+data/
+.secrets.key
 __pycache__/
 *.pyc
 .venv/

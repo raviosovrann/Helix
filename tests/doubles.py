@@ -20,6 +20,25 @@ from tradingbot.models import (
 _FLAT_TOL = 1e-9
 
 
+class EmptyMarketData:
+    """A ``MarketData`` that has no history, for strategies that read none.
+
+    Conforms to the protocol rather than passing ``None`` (#130): a context
+    built with ``None`` type-checks only because the old field was ``Any``,
+    which is precisely the hole the typed contract closes.
+    """
+
+    def candles(self, symbol: str, timeframe: str, limit: int) -> Sequence[Candle]:
+        """Return no candles."""
+        del symbol, timeframe, limit
+        return ()
+
+    def latest_price(self, symbol: str, timeframe: str) -> float | None:
+        """Return no price."""
+        del symbol, timeframe
+        return None
+
+
 def normalize_candle(value: Candle | Mapping[str, float | int]) -> Candle:
     if isinstance(value, Candle):
         return value

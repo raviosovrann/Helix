@@ -84,7 +84,11 @@ class MarketDataHub:
         self._clock = clock
         self._handlers: dict[_Key, list[_Handler]] = {}
         self._stream_tasks: dict[_Key, asyncio.Task[None]] = {}
-        self._warmup_cache: dict[_Key, tuple[float, list[Candle]]] = {}
+        # (fetched_at, requested_depth, candles). The depth is stored alongside
+        # the rows because a market with only 50 bars of history can never
+        # satisfy len(candles) >= 200; comparing against what was *asked for*
+        # keeps that case from refetching on every call (#130).
+        self._warmup_cache: dict[_Key, tuple[float, int, list[Candle]]] = {}
         self._warmup_locks: dict[_Key, asyncio.Lock] = {}
         self._latest_prices: dict[_Key, float] = {}
         self._exit_listeners: list[_ExitListener] = []
@@ -247,19 +251,39 @@ class MarketDataHub:
                 _log.exception("market data handler failed for %s %s", *key)
 
     async def warmup(self, symbol: str, timeframe: str, limit: int) -> list[Candle]:
-        """Return up to ``limit`` historical candles, rate-limited and cached.
+        """Return the newest ``limit`` historical candles, rate-limited and cached.
 
         Concurrent calls for the same key coalesce behind an async lock so only
         one REST fetch is made; subsequent callers receive the cached copy until
         ``mtf_cache_seconds`` elapses.
+
+        The cache is keyed on ``(symbol, timeframe)`` but qualified by depth, so
+        results no longer depend on call order (#130). A cached entry serves a
+        request no deeper than the one that filled it, sliced to the newest
+        ``limit``; a deeper request refetches and replaces it. Previously a
+        20-candle warmup capped a later 200-candle one, and a 200-candle warmup
+        handed 200 rows to a caller that asked for 20.
+
+        Args:
+            symbol: Trading symbol.
+            timeframe: Candle timeframe.
+            limit: Maximum number of candles wanted, newest last.
+
+        Returns:
+            At most ``limit`` candles, oldest first. Fewer only when the venue
+            has less history than that.
         """
         key = (symbol, timeframe)
         lock = self._warmup_locks.setdefault(key, asyncio.Lock())
         async with lock:
             now = self._clock()
             cached = self._warmup_cache.get(key)
-            if cached is not None and now - cached[0] < self._mtf_cache_seconds:
-                return list(cached[1])
+            if (
+                cached is not None
+                and now - cached[0] < self._mtf_cache_seconds
+                and cached[1] >= limit
+            ):
+                return cached[2][-limit:]
 
             await self._limiter.acquire()
             # warmup_candles() is a blocking REST call (ccxt is synchronous);
@@ -268,10 +292,10 @@ class MarketDataHub:
             candles = list(
                 await self._workers.run(self._candle_feed.warmup_candles, symbol, timeframe, limit)
             )
-            self._warmup_cache[key] = (self._clock(), candles)
+            self._warmup_cache[key] = (self._clock(), limit, candles)
             if candles:
                 self._latest_prices[key] = candles[-1].close
-            return list(candles)
+            return candles[-limit:]
 
     def latest_price(self, symbol: str, timeframe: str) -> float | None:
         """Return the last close seen for ``symbol/timeframe`` (or ``None``)."""

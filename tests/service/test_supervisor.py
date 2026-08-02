@@ -12,6 +12,7 @@ from tradingbot.service.events import EventBus, OrderEvent
 from tradingbot.router import SignalRouter
 from tradingbot.service.exposure import ExposureTracker
 from tradingbot.service.supervisor import BotConfig, BotSupervisor
+from tradingbot.strategies import DataRequirements
 
 
 def _candle(ts: int = 1, close: float = 100.0) -> Candle:
@@ -159,6 +160,80 @@ async def test_supervisor_start_stop_and_order_event(monkeypatch) -> None:
 
     await supervisor.stop("one")
     assert supervisor.get("one").status == "stopped"  # type: ignore[union-attr]
+
+
+class _MultiTimeframeStrategy:
+    """Reads two timeframes through the typed contract, as a real MTF strategy does.
+
+    This is the strategy #130's acceptance criteria describe. Before the typed
+    contract it could not run at all: the supervisor passed a ``MarketDataHub``
+    into a field documented as a synchronous ``warmup_candles()`` feed, so the
+    first read raised ``AttributeError`` -- and calling the hub's real async
+    ``warmup()`` from ``on_bar`` would have returned a coroutine on a worker
+    lane with no loop to await it.
+    """
+
+    data_requirements = DataRequirements(history={"1m": 20, "1h": 50})
+
+    def __init__(self, ctx) -> None:
+        self.ctx = ctx
+        self.seen: list[tuple[str, int]] = []
+
+    def on_bar(self, candles) -> Signal | None:
+        del candles
+        fast = self.ctx.market_data.candles("BTC/USD", "1m", 20)
+        slow = self.ctx.market_data.candles("BTC/USD", "1h", 50)
+        self.seen.append(("1m", len(fast)))
+        self.seen.append(("1h", len(slow)))
+        return None
+
+
+class _DepthHub(_FakeHub):
+    """Hub whose warmup depth is observable, so prefetch can be asserted on."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.requested: list[tuple[str, int]] = []
+
+    async def warmup(self, symbol: str, timeframe: str, limit: int) -> list[Candle]:
+        del symbol
+        self.warmups += 1
+        self.requested.append((timeframe, limit))
+        return [_candle(ts=i) for i in range(1, limit + 1)]
+
+
+@pytest.mark.asyncio
+async def test_multi_timeframe_strategy_runs_through_the_supervisor(monkeypatch) -> None:
+    """A strategy reading declared timeframes evaluates without loop errors (#130)."""
+    hub = _DepthHub()
+    built: list[_MultiTimeframeStrategy] = []
+
+    def _build(name, ctx):
+        del name
+        strategy = _MultiTimeframeStrategy(ctx)
+        built.append(strategy)
+        return strategy
+
+    monkeypatch.setattr("tradingbot.service.supervisor.build_venue", lambda *a, **k: _FakeVenue())
+    monkeypatch.setattr("tradingbot.service.supervisor.build_strategy", _build)
+    monkeypatch.setattr(
+        "tradingbot.service.supervisor.strategy_data_requirements",
+        lambda name: _MultiTimeframeStrategy.data_requirements,
+    )
+    supervisor = BotSupervisor(
+        hub_factory=lambda cfg: hub, event_bus=EventBus(), exposure=ExposureTracker()
+    )
+    supervisor.create(_config("mtf"))
+
+    await supervisor.start("mtf")
+    strategy = built[0]
+    # Evaluate exactly as the runtime does, on the bot's worker lane.
+    result = strategy.on_bar([_candle()])
+
+    assert result is None
+    assert strategy.seen == [("1m", 20), ("1h", 50)]
+    assert ("1h", 50) in hub.requested, "the declared higher timeframe was prefetched"
+    await supervisor.stop("mtf")
 
 
 class _RecordingStore:

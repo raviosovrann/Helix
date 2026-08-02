@@ -187,6 +187,49 @@ class TestSpaServing:
         assert response.status_code == 200
         assert response.text == "console.log('hi')"
 
+    def test_index_is_never_served_from_cache_without_revalidating(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """index.html must carry no-cache, or a redeploy is invisible.
+
+        Without an explicit Cache-Control, browsers apply *heuristic* caching
+        and reuse the document without asking the server. index.html names the
+        content-hashed bundle, so a stale copy keeps loading the previous
+        build's JS and CSS: the operator sees the old app until they hard
+        refresh, which is exactly what happened after a UI deploy.
+        """
+        client = self._client(tmp_path, monkeypatch)
+
+        cache_control = client.get("/").headers.get("cache-control", "")
+
+        assert "no-cache" in cache_control or "no-store" in cache_control
+
+    def test_deep_link_also_revalidates(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Deep links return the same document, so they need the same header."""
+        client = self._client(tmp_path, monkeypatch)
+
+        cache_control = client.get("/bots/some-id").headers.get("cache-control", "")
+
+        assert "no-cache" in cache_control or "no-store" in cache_control
+
+    def test_hashed_assets_are_cached_immutably(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Asset filenames carry a content hash, so they never need revalidating.
+
+        The pair matters: the document is always rechecked and the bundle it
+        names never is. Caching neither would make every navigation refetch the
+        whole app.
+        """
+        client = self._client(tmp_path, monkeypatch)
+
+        cache_control = client.get("/assets/app.js").headers.get("cache-control", "")
+
+        assert "immutable" in cache_control
+        assert "max-age=" in cache_control
+
     def test_deep_link_falls_back_to_index(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """A client-side route falls back to index.html (SPA routing)."""
         client = self._client(tmp_path, monkeypatch)
@@ -592,6 +635,115 @@ class TestBotLifecycle:
         assert bot["live"] is False
         assert bot["status"] == "created"
 
+    def test_paper_bot_is_created_without_any_credentials(self, client: TestClient) -> None:
+        """The whole point of #116: a demo bot needs no exchange keys."""
+        bot = self._create(client, venue="paper", market_type="spot")
+
+        assert bot["venue"] == "paper"
+        assert bot["live"] is False
+
+    def test_paper_bot_cannot_be_created_live(self, client: TestClient) -> None:
+        """A simulated venue must be impossible to arm (#116)."""
+        response = client.post(
+            "/api/bots",
+            json={
+                "venue": "paper",
+                "market_type": "spot",
+                "strategy": "example",
+                "symbol": "BTC/USD",
+                "timeframe": "1m",
+                "quantity": 0.1,
+                "per_bot_cap": 1_000.0,
+                "global_cap": 10_000.0,
+                "params": {},
+                "live": True,
+            },
+            headers=_auth(),
+        )
+
+        assert response.status_code == 400
+        assert "cannot run LIVE" in response.json()["detail"]
+
+    def test_paper_bot_cannot_be_patched_live(self, client: TestClient) -> None:
+        """Blocked on the update path too, not only at create (#116).
+
+        A bot patched live would read as armed in the UI and the audit log
+        until the next start attempt failed -- so the operator would believe
+        real money was at risk, or that paper's simulated profits were real.
+        """
+        bot = self._create(client, venue="paper", market_type="spot")
+
+        response = client.patch(
+            f"/api/bots/{bot['id']}", json={"live": True}, headers=_auth()
+        )
+
+        assert response.status_code == 400
+        assert "cannot run LIVE" in response.json()["detail"]
+
+    def test_paper_bot_can_still_be_patched_for_caps(self, client: TestClient) -> None:
+        """The guard is about arming, not about editing a paper bot at all."""
+        bot = self._create(client, venue="paper", market_type="spot")
+
+        response = client.patch(
+            f"/api/bots/{bot['id']}", json={"per_bot_cap": 25.0}, headers=_auth()
+        )
+
+        assert response.status_code == 200
+        assert response.json()["per_bot_cap"] == 25.0
+
+    def test_demo_strategy_cannot_be_created_live(self, client: TestClient) -> None:
+        """A demo strategy has no risk management; arming one is never meant (#119)."""
+        response = client.post(
+            "/api/bots",
+            json={
+                "venue": "coinbase",
+                "market_type": "spot",
+                "strategy": "demo-crossover",
+                "symbol": "BTC/USD",
+                "timeframe": "1m",
+                "quantity": 0.1,
+                "per_bot_cap": 1_000.0,
+                "global_cap": 10_000.0,
+                "params": {},
+                "live": True,
+            },
+            headers=_auth(),
+        )
+
+        assert response.status_code == 400
+        assert "demonstration strategy" in response.json()["detail"]
+
+    def test_demo_strategy_cannot_be_patched_live(self, client: TestClient) -> None:
+        """Blocked on the update path too, as with the paper venue (#119)."""
+        bot = self._create(client, strategy="demo-crossover")
+
+        response = client.patch(
+            f"/api/bots/{bot['id']}", json={"live": True}, headers=_auth()
+        )
+
+        assert response.status_code == 400
+        assert "demonstration strategy" in response.json()["detail"]
+
+    def test_demo_strategy_is_fine_in_dry_run(self, client: TestClient) -> None:
+        """The block is on arming, not on using the demo at all."""
+        bot = self._create(client, strategy="demo-crossover")
+
+        assert bot["strategy"] == "demo-crossover"
+        assert bot["live"] is False
+
+    def test_venue_listing_reports_paper_as_not_live_capable(
+        self, client: TestClient
+    ) -> None:
+        """The UI reads this to disable its LIVE toggle rather than guess."""
+        venues = client.get("/api/venues", headers=_auth()).json()
+
+        paper = next(v for v in venues if v["venue"] == "paper")
+        coinbase = next(
+            v for v in venues if v["venue"] == "coinbase" and v["market_type"] == "spot"
+        )
+        assert paper["supports_live"] is False
+        assert coinbase["supports_live"] is True
+
     def test_start_bot_then_get_shows_running(self, client: TestClient) -> None:
         """Verify that starting a bot sets its status to running and stopping sets it to stopped."""
         bot = self._create(client)
@@ -797,6 +949,54 @@ class TestCredentialRotation:
         assert response.status_code == 409
         detail = response.json()["detail"]
         assert bot_id in detail, "the operator needs to know which bot blocks it"
+
+    def test_resubmitting_identical_credentials_is_not_a_rotation(
+        self, client: TestClient
+    ) -> None:
+        """Re-sending the same keys must not be refused while a bot runs.
+
+        Creating a second bot on a venue re-submits the credentials the
+        operator already stored. Nothing rotates, so the #137 guard should not
+        fire -- and refusing here blocks the ordinary case of running two bots
+        on one account.
+        """
+        bot_id = self._bot(client)
+        _login(client)
+        client.put(
+            "/api/venues/coinbase/spot/secrets",
+            json={"api_key": "same", "api_secret": "same"},
+            headers=_csrf(client),
+        )
+        client.post(f"/api/bots/{bot_id}/start", headers=_csrf(client))
+
+        response = client.put(
+            "/api/venues/coinbase/spot/secrets",
+            json={"api_key": "same", "api_secret": "same"},
+            headers=_csrf(client),
+        )
+
+        assert response.status_code == 204, response.text
+
+    def test_a_real_rotation_is_still_refused_while_a_bot_runs(
+        self, client: TestClient
+    ) -> None:
+        """The no-op allowance must not weaken the guard it sits in front of."""
+        bot_id = self._bot(client)
+        _login(client)
+        client.put(
+            "/api/venues/coinbase/spot/secrets",
+            json={"api_key": "old", "api_secret": "old"},
+            headers=_csrf(client),
+        )
+        client.post(f"/api/bots/{bot_id}/start", headers=_csrf(client))
+
+        response = client.put(
+            "/api/venues/coinbase/spot/secrets",
+            json={"api_key": "old", "api_secret": "CHANGED"},
+            headers=_csrf(client),
+        )
+
+        assert response.status_code == 409
 
     def test_rotation_succeeds_once_the_bot_is_stopped(self, client: TestClient) -> None:
         """Verify the documented stop -> rotate -> start flow works."""

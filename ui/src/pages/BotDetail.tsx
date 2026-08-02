@@ -6,9 +6,11 @@ import { describeTrade } from '../tradeEvent'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { DecisionLog } from '../components/DecisionLog'
 import { LiveBadge } from '../components/LiveBadge'
+import { BotStatusPill } from '../components/StatusPill'
 import { PnlSparkline } from '../components/PnlSparkline'
 import { useBotEvents } from '../hooks/useBotEvents'
 import type { BotView } from '../types'
+import { marketLabel, venueLabel } from '../labels'
 
 interface PendingAction {
   /** Short action name; becomes the dialog's accessible name. */
@@ -75,16 +77,22 @@ export function BotDetail() {
   if (isLoading)
     return (
       <main className="page">
-        <p className="muted">Loading…</p>
+        {/* A shaped skeleton rather than the word "Loading", so the page does
+            not visibly reflow once the data lands (#164). */}
+        <div className="skeleton-stack" data-testid="bot-loading">
+          <div className="skeleton" style={{ width: '14rem', height: '1.4rem' }} />
+          <div className="skeleton" style={{ width: '100%', height: '9rem' }} />
+          <div className="skeleton" style={{ width: '100%', height: '9rem' }} />
+        </div>
       </main>
     )
   if (error || !bot) {
     return (
       <main className="page">
-        <p role="alert" className="error">
+        <p role="alert" className="state-error">
           Failed to load bot: {String(error ?? 'not found')}
         </p>
-        <Link to="/" className="button-link">
+        <Link to="/dashboard" className="button-link">
           Back to dashboard
         </Link>
       </main>
@@ -96,7 +104,7 @@ export function BotDetail() {
     if (checked) {
       setPending({
         title: `Enable LIVE trading for ${bot.symbol}`,
-        message: `Real orders will be sent to ${bot.venue} and can move real money.`,
+        message: `Real orders will be sent to ${venueLabel(bot.venue)} and can move real money.`,
         run: () => patchBot.mutateAsync({ live: true }),
       })
     } else {
@@ -134,7 +142,7 @@ export function BotDetail() {
           {bot.symbol} <LiveBadge live={bot.live} />
         </h1>
         <nav className="button-row">
-          <Link to="/" className="button-link">
+          <Link to="/dashboard" className="button-link">
             Dashboard
           </Link>
           {bot.status === 'running' ? (
@@ -157,7 +165,7 @@ export function BotDetail() {
                 setPending({
                   title: `Start ${bot.symbol} in ${bot.live ? 'LIVE' : 'dry-run'} mode`,
                   message: bot.live
-                    ? `Real orders will be sent to ${bot.venue} and can move real money.`
+                    ? `Real orders will be sent to ${venueLabel(bot.venue)} and can move real money.`
                     : 'Orders are logged only; nothing is sent to the venue.',
                   run: () => startBot.mutateAsync(bot.id),
                 })
@@ -173,9 +181,12 @@ export function BotDetail() {
               setPending({
                 title: `Delete ${bot.symbol}`,
                 message:
-                  `Its configuration is removed permanently from ${bot.venue}. ` +
+                  `Its configuration is removed permanently from ${venueLabel(bot.venue)}. ` +
                   'Recorded trades are archived, not deleted.',
-                run: () => deleteBot.mutateAsync(bot.id).then(() => navigate('/')),
+                // Back to the console, not to `/` — that is the public landing
+                // page now, and landing there after a delete looks exactly like
+                // having been signed out.
+                run: () => deleteBot.mutateAsync(bot.id).then(() => navigate('/dashboard')),
               })
             }
           >
@@ -190,7 +201,7 @@ export function BotDetail() {
           <dl className="config-list">
             <dt>Venue</dt>
             <dd>
-              {bot.venue} ({bot.market_type})
+              {venueLabel(bot.venue)} ({marketLabel(bot.market_type)})
             </dd>
             <dt>Strategy</dt>
             <dd>{bot.strategy}</dd>
@@ -199,7 +210,9 @@ export function BotDetail() {
             <dt>Quantity</dt>
             <dd>{bot.quantity}</dd>
             <dt>Status</dt>
-            <dd>{bot.status}</dd>
+            <dd>
+              <BotStatusPill bot={bot} />
+            </dd>
             <dt>Position</dt>
             <dd>
               {bot.position && bot.position.side !== 'flat'

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 import os
 import contextlib
@@ -24,7 +25,7 @@ from fastapi.websockets import WebSocket, WebSocketDisconnect
 
 from ..models import Position
 from ..stream import StreamingNotSupported
-from ..strategies import strategy_requirements
+from ..strategies import is_demo_strategy, strategy_requirements
 from ..venues.capabilities import CapabilityError, check_strategy
 from ..venues.contracts import ContractMetadataError
 from .audit import AuditLog
@@ -149,6 +150,92 @@ def _unauthorized() -> HTTPException:
         detail="Not authenticated",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _same_credentials(
+    secrets: Any, venue: str, market_type: str, submitted: dict
+) -> bool:
+    """Return whether ``submitted`` already matches what is stored.
+
+    Compared as digests of canonical JSON, in constant time, so neither the
+    stored nor the submitted values are held for comparison or leak through
+    timing.
+
+    Args:
+        secrets: The full stored secrets mapping.
+        venue: Venue identifier.
+        market_type: Market type identifier.
+        submitted: Credentials from the request.
+
+    Returns:
+        True when the two sets are identical.
+    """
+    venue_secrets = secrets.get(venue.strip().lower(), {}) if isinstance(secrets, dict) else {}
+    stored = (
+        venue_secrets.get(market_type.strip().lower(), {})
+        if isinstance(venue_secrets, dict)
+        else {}
+    )
+    if not isinstance(stored, dict) or not stored:
+        return False
+
+    def digest(values: dict) -> str:
+        canonical = json.dumps(values, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    return hmac.compare_digest(digest(stored), digest(submitted))
+
+
+def _require_live_capable(venue: str, market_type: str) -> None:
+    """Refuse LIVE on a venue that cannot execute with real money (#116).
+
+    Args:
+        venue: Venue identifier.
+        market_type: Market type identifier.
+
+    Raises:
+        HTTPException: 400 if the venue declares ``supports_live=False``.
+    """
+    try:
+        capabilities = venue_capabilities(venue, market_type)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    if not capabilities.supports_live:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{venue}/{market_type} cannot run LIVE: it simulates fills and "
+                "holds no credentials, so its positions and profits exist only "
+                "in this application. Create a bot on a real venue with valid "
+                "credentials to trade live."
+            ),
+        )
+
+
+def _require_not_demo_strategy(name: str) -> None:
+    """Refuse LIVE for a demonstration strategy (#119).
+
+    A demo strategy exists so the plumbing can be watched end to end. It has no
+    risk management, no position sizing and no regard for cost, so arming one
+    is never intentional.
+
+    Args:
+        name: Registered strategy name.
+
+    Raises:
+        HTTPException: 400 if the strategy declares itself demo-only.
+    """
+    if is_demo_strategy(name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Strategy {name!r} is a demonstration strategy and cannot be "
+                "run LIVE. It has no risk management and exists only to show "
+                "signal routing, order events and PnL working end to end."
+            ),
+        )
 
 
 def _resolve_cookie_principal(
@@ -661,6 +748,14 @@ def create_app(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="no credentials supplied",
             )
+        # Re-submitting the credentials already stored is not a rotation, so
+        # none of what follows applies: nothing changes, no client is stale, and
+        # no bot needs restarting. This is the ordinary path when an operator
+        # creates a second bot on a venue they have already configured, and
+        # refusing it would block running two bots on one account.
+        if _same_credentials(store.load_secrets(), venue, market_type, creds):
+            return
+
         # The venue client is built once when a bot starts, so rotating under a
         # running bot would leave the API advertising credentials that bot is
         # not using — the same half-applied state #109 refuses for config.
@@ -741,6 +836,9 @@ def create_app(
                 strategy_requirements(request.strategy),
                 capabilities,
             )
+            if request.live:
+                _require_live_capable(request.venue, request.market_type)
+                _require_not_demo_strategy(request.strategy)
         except (ValueError, CapabilityError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
@@ -862,6 +960,14 @@ def create_app(
             "per_bot_cap": bot.config.per_bot_cap,
             "global_cap": bot.config.global_cap,
         }
+        if request.live:
+            # A simulated venue can never be armed (#116). Checked here as well
+            # as in the venue builder because a bot patched live would look
+            # armed in the UI and the audit log until the next start attempt
+            # failed -- the operator would believe real money was at risk, or
+            # worse, that it was making the profits paper reports.
+            _require_live_capable(bot.config.venue, bot.config.market_type)
+            _require_not_demo_strategy(bot.config.strategy)
         if request.live is not None:
             bot.config.live = request.live
         if request.per_bot_cap is not None:
@@ -987,11 +1093,20 @@ def create_app(
                 status_code=status.HTTP_409_CONFLICT, detail=str(exc)
             ) from exc
 
+        def _cleanup() -> str | None:
+            """Archive the trade log and drop the config. Blocking filesystem work."""
+            destination = store.archive_trades(bot_id)
+            store.delete_config(bot_id)
+            return str(destination) if destination is not None else None
+
         archived: str | None = None
         try:
-            destination = store.archive_trades(bot_id)
-            archived = str(destination) if destination is not None else None
-            store.delete_config(bot_id)
+            # Off the event loop: archiving renames every trade segment the bot
+            # ever wrote, which for a long-lived bot is enough filesystem work
+            # to stall the API, its WebSocket fan-out and every other bot's
+            # poll for as long as it takes. Running it inline made a delete feel
+            # like the console had frozen.
+            archived = await asyncio.to_thread(_cleanup)
         except Exception:  # noqa: BLE001 - the bot is already gone from the runtime
             _log.exception("failed to clean up persisted state for bot %s", bot_id)
         _audit(
@@ -1112,6 +1227,22 @@ def create_app(
     return app
 
 
+class _ImmutableStaticFiles(StaticFiles):
+    """Serves build assets with a permanent cache.
+
+    Vite emits content-hashed filenames, so a given URL's bytes can never
+    change: any edit produces a new filename. Caching these immutably is what
+    makes ``no-cache`` on ``index.html`` cheap -- the document is rechecked on
+    every navigation, and the bundle it names is never refetched.
+    """
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Any:
+        """Attach the immutable cache header to each served file."""
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
 def _mount_spa(app: FastAPI, dist: Path) -> None:
     """Serve the built SPA from ``dist`` when it contains ``index.html``.
 
@@ -1133,10 +1264,28 @@ def _mount_spa(app: FastAPI, dist: Path) -> None:
         return
     assets = root / "assets"
     if assets.is_dir():
-        app.mount("/assets", StaticFiles(directory=str(assets)), name="assets")
+        app.mount("/assets", _ImmutableStaticFiles(directory=str(assets)), name="assets")
 
     @app.get("/{full_path:path}")
     async def spa(full_path: str) -> FileResponse:
-        """Return the SPA entry point for every non-API deep link."""
+        """Return the SPA entry point for every non-API deep link.
+
+        ``index.html`` names the content-hashed bundle, so it must be
+        revalidated on every navigation. Without an explicit ``Cache-Control``
+        browsers apply *heuristic* caching -- they reuse the document without
+        asking the server -- and a deployed UI change stays invisible until the
+        operator hard-refreshes.
+
+        ``no-store`` rather than ``no-cache``: the latter is the correct,
+        cheaper answer in theory, but some browsers (Brave and other
+        Chromium forks with aggressive caching) were observed still serving a
+        stale document through it, even after a hard reload. The document is
+        under a kilobyte and the bundle it names is cached immutably, so
+        refusing to store it costs almost nothing and removes the whole class
+        of "the deploy went out but I still see the old UI".
+        """
         del full_path
-        return FileResponse(str(index))
+        return FileResponse(
+            str(index),
+            headers={"Cache-Control": "no-store, must-revalidate"},
+        )

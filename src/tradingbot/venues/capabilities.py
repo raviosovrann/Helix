@@ -49,11 +49,22 @@ class VenueCapabilities:
     order_types: frozenset[OrderType]
     """Order types the venue accepts."""
 
+    supports_live: bool = True
+    """Whether this venue can ever execute with real money (#116).
+
+    False for the paper venue, which simulates its fills: a LIVE paper bot
+    would report positions and profits no exchange has any record of. Declared
+    here rather than special-cased at each call site so the API, the venue
+    builder and the UI's LIVE toggle all read one answer.
+    """
+
     def describe(self) -> str:
         """Return a one-line human description, for operator-facing errors."""
         traits = ["short" if self.supports_short else "long-only"]
         if self.supports_reduce_only:
             traits.append("reduce-only")
+        if not self.supports_live:
+            traits.append("simulated fills, dry-run only")
         types = ", ".join(sorted(t.value for t in self.order_types))
         return f"{self.venue}/{self.market_type} ({', '.join(traits)}; {types})"
 

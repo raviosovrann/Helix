@@ -6,6 +6,7 @@ from collections.abc import Sequence
 
 import pytest
 
+from doubles import EmptyMarketData
 from tradingbot.models import Candle, Signal
 from tradingbot.strategies.base import Strategy, StrategyContext
 from tradingbot.strategies.registry import (
@@ -57,7 +58,7 @@ def test_registered_strategy_is_available_and_buildable() -> None:
         symbol="BTC/USD",
         timeframe="1h",
         quantity=1.0,
-        data_feed=object(),
+        market_data=EmptyMarketData(),
         params={"window": 5},
     )
 
@@ -124,6 +125,6 @@ def _context() -> StrategyContext:
         symbol="BTC/USD",
         timeframe="1m",
         quantity=0.1,
-        data_feed=None,
+        market_data=EmptyMarketData(),
         params={},
     )

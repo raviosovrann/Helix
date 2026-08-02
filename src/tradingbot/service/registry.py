@@ -15,6 +15,7 @@ from ..models import OrderType
 from ..venues.base import ExecutionVenue
 from ..venues.capabilities import VenueCapabilities
 from ..venues.ccxt import CcxtVenue
+from ..venues.paper import PaperVenue
 from ..venues.tradovate import TradovateVenue
 
 _Credentials = dict[str, object]
@@ -84,6 +85,33 @@ def _build_tradovate(creds: _Credentials, live: bool) -> ExecutionVenue:
         raise ValueError(f"Invalid Tradovate credentials: {exc}") from exc
 
 
+def _build_paper(creds: _Credentials, live: bool) -> ExecutionVenue:
+    """Build the credential-free paper venue (#116).
+
+    Args:
+        creds: Ignored. Paper authenticates nothing, and quietly accepting a
+            stored key would suggest otherwise.
+        live: Must be False.
+
+    Returns:
+        A fresh ``PaperVenue``.
+
+    Raises:
+        ValueError: If ``live`` is True. Paper simulates its fills, so a LIVE
+            paper bot would report positions and profits no exchange has any
+            record of. Refusing at construction means no configuration --
+            stored, migrated or hand-edited -- can produce one.
+    """
+    del creds
+    if live:
+        raise ValueError(
+            "The paper venue cannot be run LIVE: it simulates fills and holds "
+            "no credentials. Create a bot on a real venue with valid "
+            "credentials to trade live."
+        )
+    return PaperVenue()
+
+
 _SPOT_CAPABILITIES = dict(
     supports_short=False,
     # Spot has no position to reduce: a sell disposes of inventory, and no
@@ -100,6 +128,10 @@ _DERIVATIVE_CAPABILITIES = dict(
 _VENUE_CAPABILITIES: dict[tuple[str, str], dict] = {
     ("coinbase", "spot"): _SPOT_CAPABILITIES,
     ("coinbase", "futures"): _DERIVATIVE_CAPABILITIES,
+    # Paper simulates a spot account, so it inherits spot's limits rather than
+    # being allowed to do things the venue it stands in for cannot (#116). A
+    # paper bot that could short would demo a trade real spot would refuse.
+    ("paper", "spot"): {**_SPOT_CAPABILITIES, "supports_live": False},
     ("tradovate", "futures"): _DERIVATIVE_CAPABILITIES,
 }
 """What each supported pair can do (#125).
@@ -112,8 +144,10 @@ mapping has an entry.
 _VENUE_BUILDERS: dict[tuple[str, str], _VenueBuilder] = {
     ("coinbase", "spot"): _ccxt_builder("spot"),
     ("coinbase", "futures"): _ccxt_builder("futures"),
+    ("paper", "spot"): _build_paper,
     ("tradovate", "futures"): _build_tradovate,
 }
+
 
 
 def build_venue(
@@ -178,6 +212,7 @@ def available_venues() -> list[dict[str, Any]]:
             "market_type": market_type,
             "supports_short": caps.supports_short,
             "supports_reduce_only": caps.supports_reduce_only,
+            "supports_live": caps.supports_live,
             "order_types": sorted(t.value for t in caps.order_types),
         })
     return listing

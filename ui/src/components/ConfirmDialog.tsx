@@ -153,6 +153,10 @@ export function ConfirmDialog({
             Cancel
           </button>
           <button className="danger" disabled={pending} onClick={() => void confirm()}>
+            {/* A spinner as well as the word: a disabled button with changed
+                text is easy to read as "nothing happened", and the actions
+                behind this dialog can take a noticeable moment. */}
+            {pending && <span className="spinner" aria-hidden="true" />}
             {pending ? 'Working…' : 'Confirm'}
           </button>
         </div>

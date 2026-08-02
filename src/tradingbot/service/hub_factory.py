@@ -66,6 +66,15 @@ def _default_feed_builder(venue: str, market_type: str, timeframe: str, creds: d
         candle_feed = stream_feed.warmup_feed
         return stream_feed, candle_feed
 
+    if venue == "paper":
+        # The paper venue simulates execution but watches the real market
+        # (#116). Coinbase's public candle and trade feeds need no credentials,
+        # which is what makes a genuinely credential-free demo possible: only
+        # the fills are simulated, never the prices.
+        candle_feed = CoinbaseCandleFeed()
+        stream_feed = CoinbaseStreamFeed(timeframe=timeframe, warmup_feed=candle_feed)
+        return stream_feed, candle_feed
+
     if (
         venue == "coinbase"
         and market_type == "spot"

@@ -9,11 +9,13 @@ from __future__ import annotations
 from importlib import import_module
 from pkgutil import iter_modules
 
-from .base import Strategy, StrategyContext
+from .base import DataRequirements, MarketData, Strategy, StrategyContext
 from .registry import (
     available_strategies,
     build_strategy,
+    is_demo_strategy,
     strategy,
+    strategy_data_requirements,
     strategy_requirements,
 )
 
@@ -29,10 +31,14 @@ def _discover() -> None:
 _discover()
 
 __all__ = [
+    "DataRequirements",
+    "MarketData",
     "Strategy",
     "StrategyContext",
     "available_strategies",
     "build_strategy",
+    "is_demo_strategy",
     "strategy",
+    "strategy_data_requirements",
     "strategy_requirements",
 ]
