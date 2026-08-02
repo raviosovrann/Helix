@@ -11,6 +11,56 @@ docker compose up -d --build
 docker compose exec helix helix bootstrap --username admin
 ```
 
+## The target: one small VPS, this compose file, Caddy in front
+
+Decided rather than left open, because the choice is forced by three
+properties of the application and picking wrongly is expensive to undo.
+
+**What constrains it.** The store is a directory of files, not a database, so
+there is exactly one writer and no horizontal scale. Bots hold a Coinbase
+WebSocket open and reconnect on drop (#117), so the process must be
+long-lived, not woken per request. And a bot's state lives in that directory,
+so an instance that is recycled onto fresh storage loses the operator's bots.
+
+**What that rules out.** Anything that scales to zero or replaces instances
+without a stable volume — Cloud Run, Lambda-style hosting, and any autoscaled
+group. A platform that "helpfully" runs two replicas would give two schedulers
+writing one store and two copies of every bot trading the same account.
+
+**The choice.** A single small VPS (2 vCPU / 2 GB is ample — the container is
+capped at 1 CPU / 512 MB) running the compose file above, with Caddy
+terminating TLS in front of the loopback-bound container. It is the only
+option that deploys the artifact this repo actually maintains and CI already
+smoke-tests, with no second definition of the deployment to drift out of step.
+Caddy over nginx purely for automatic certificates; the header block in the
+nginx snippet below is the requirement, not the server.
+
+**The alternative, if host management is unwanted.** Fly.io fits the same
+shape — one machine, one attached volume, WebSockets and TLS included. It
+costs a second deployment definition (`fly.toml`) that must be kept in step
+with the compose file, which is the reason it is the alternative and not the
+target.
+
+**Deploying it**, once the host exists and DNS points at it:
+
+```bash
+ssh <host>
+git clone https://github.com/raviosovrann/Helix.git && cd Helix
+export HELIX_SECRETS_KEY="$(docker run --rm python:3.13-slim python -c \
+  'import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())')"
+export HELIX_ALLOWED_ORIGINS="https://console.example.com"
+docker compose up -d --build
+docker compose exec helix helix bootstrap --username admin
+```
+
+Store `HELIX_SECRETS_KEY` in a secret manager before the first start. It is
+not recoverable, and without it every stored venue credential is unreadable —
+a failure that looks exactly like the key being wrong rather than missing.
+
+Upgrades are `git pull && docker compose up -d --build`. The data volume
+(`helix-data`) is not touched by a rebuild; back it up first regardless, using
+the commands under [Backup and restore](#backup-and-restore).
+
 ## Health probes
 
 | Endpoint | Purpose | Behaviour |
