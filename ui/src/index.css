@@ -1,12 +1,33 @@
+/* Design direction (#164), agreed before restyling — see doc/m4-plan.md.
+   Near-black, faintly green-tinted surfaces; one mint accent reserved for
+   primary action and positive state; muted grey body copy carrying hierarchy
+   against tight, bright headings. LIVE deliberately breaks the green system so
+   it can never read as a healthy state. Colour is never the only carrier of
+   meaning: every status pairs its colour with a dot and a text label. */
 :root {
-  --bg: #0f1115;
-  --panel: #181b21;
-  --border: #2a2f38;
-  --text: #e6e8eb;
-  --muted: #9aa3af;
-  --accent: #3b82f6;
-  --danger: #ef4444;
-  --warning: #f59e0b;
+  --bg: #070b09;
+  --panel: #0e1512;
+  --panel-raised: #131b17;
+  --border: #1e2a24;
+  --border-strong: #2c3b33;
+  --text: #eaf2ed;
+  --muted: #8b9a92;
+  --accent: #4ade80;
+  --accent-dim: #22c55e;
+  --accent-glow: rgb(74 222 128 / 25%);
+  --danger: #f87171;
+  --warning: #fbbf24;
+
+  /* One spacing scale, so padding stops being invented per component. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --radius: 10px;
+  --radius-pill: 999px;
+
   font-family:
     system-ui,
     -apple-system,
@@ -22,26 +43,69 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(90rem 40rem at 50% -20rem, rgb(74 222 128 / 6%), transparent 70%), var(--bg);
+  background-attachment: fixed;
   color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
 }
 
 button {
   cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  background: var(--panel-raised);
   color: var(--text);
-  padding: 0.45rem 0.8rem;
-  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-pill);
   font-size: 0.9rem;
+  font-weight: 500;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
 }
 
 button:hover:not(:disabled) {
   border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The one primary action per screen. The glow is this accent's only flourish;
+   using it anywhere else would stop it meaning "this is the action". */
+button.primary,
+.button-link.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06210f;
+  font-weight: 600;
+  box-shadow: 0 0 0 0 var(--accent-glow);
+}
+
+button.primary:hover:not(:disabled),
+.button-link.primary:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+  color: #06210f;
+  box-shadow: 0 0 1.5rem 0 var(--accent-glow);
+}
+
+button:focus-visible,
+.button-link:focus-visible,
+input:focus-visible,
+select:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: default;
 }
 
@@ -75,8 +139,8 @@ label {
 .card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.5rem;
+  border-radius: var(--radius);
+  padding: var(--space-5);
   width: min(360px, 90vw);
   display: flex;
   flex-direction: column;
@@ -96,9 +160,16 @@ label {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 0.75rem;
-  margin-bottom: 1rem;
+  padding-bottom: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.topbar h1 {
+  font-size: 1.35rem;
+  margin: 0;
 }
 
 .muted {
@@ -106,22 +177,102 @@ label {
 }
 
 .badge {
-  display: inline-block;
-  padding: 0.1rem 0.45rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
+/* LIVE deliberately breaks the green system. Real money is not a healthy
+   state to be signalled with the same colour as a profitable one, and an
+   operator scanning the dashboard must never mistake one for the other. */
 .badge-live {
-  background: var(--danger);
-  color: #fff;
+  background: rgb(248 113 113 / 15%);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  box-shadow: 0 0 0.75rem rgb(248 113 113 / 25%);
 }
 
 .badge-dry {
-  background: var(--border);
+  background: transparent;
+  border: 1px solid var(--border-strong);
   color: var(--muted);
+}
+
+/* Status pills (#164). Colour, a dot and the word itself all carry the state,
+   so the meaning survives without colour vision (pairs with #132). */
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.15rem 0.6rem 0.15rem 0.5rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.status::before {
+  content: '';
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentcolor;
+  flex: none;
+}
+
+.status-running {
+  color: var(--accent);
+  border-color: rgb(74 222 128 / 40%);
+  background: rgb(74 222 128 / 8%);
+}
+
+/* Only running gets motion. A pulsing 'stopped' would be noise. */
+.status-running::before {
+  animation: status-pulse 2s ease-in-out infinite;
+}
+
+.status-starting,
+.status-stopping {
+  color: var(--warning);
+  border-color: rgb(251 191 36 / 40%);
+  background: rgb(251 191 36 / 8%);
+}
+
+.status-failed {
+  color: var(--danger);
+  border-color: rgb(248 113 113 / 40%);
+  background: rgb(248 113 113 / 8%);
+}
+
+.status-created,
+.status-stopped {
+  color: var(--muted);
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-running::before {
+    animation: none;
+  }
 }
 
 /* A degraded bot is still running, so this warns rather than alarms (#114). */
@@ -153,6 +304,15 @@ button.danger:disabled {
   color: var(--muted);
 }
 
+/* The table is the widest thing on the page, so it scrolls inside its own
+   container rather than making the whole page scroll sideways (#164). */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
 .bot-table {
   width: 100%;
   border-collapse: collapse;
@@ -162,28 +322,133 @@ button.danger:disabled {
 .bot-table th,
 .bot-table td {
   text-align: left;
-  padding: 0.5rem 0.6rem;
+  padding: var(--space-3);
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.bot-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.bot-table tbody tr {
+  transition: background 120ms ease;
+}
+
+.bot-table tbody tr:hover {
+  background: rgb(255 255 255 / 2.5%);
 }
 
 .bot-table th {
   color: var(--muted);
   font-weight: 600;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  background: var(--panel-raised);
 }
 
 .bot-table a {
-  color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
   text-decoration: none;
 }
 
+.bot-table a:hover {
+  color: var(--accent);
+}
+
+.pnl {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .pnl-pos {
-  color: #22c55e;
+  color: var(--accent);
 }
 
 .pnl-neg {
   color: var(--danger);
+}
+
+.status-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Empty states name the screen's purpose and offer the resolving action,
+   rather than only reporting an absence (#164). */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: rgb(255 255 255 / 1.5%);
+}
+
+.empty-state .muted {
+  max-width: 46ch;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Loading and error states, defined once so every screen has all three (#164). */
+.state-loading,
+.state-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.state-error {
+  border-color: rgb(248 113 113 / 40%);
+  background: rgb(248 113 113 / 8%);
+  color: var(--danger);
+}
+
+.skeleton-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.skeleton {
+  height: 0.9rem;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--panel-raised), var(--border), var(--panel-raised));
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
 }
 
 .overlay {
@@ -269,11 +534,24 @@ section.card {
 .control-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin: 0.5rem 0;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 var(--space-2);
 }
 
 .control-row label {
+  margin: 0;
+  /* Labels are block-level and full-width by default, which pushed this one
+     onto its own line beside the checkbox. */
+  flex: 1;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.control-row input[type='checkbox'] {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
   margin: 0;
 }
 

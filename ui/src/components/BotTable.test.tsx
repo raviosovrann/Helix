@@ -75,3 +75,40 @@ describe('BotTable lifecycle actions', () => {
     expect(onStart).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('BotTable presentation (#164)', () => {
+  it('offers the resolving action when there are no bots', () => {
+    // An empty state that only reports the absence leaves a new operator with
+    // nowhere to go; the dashboard is the first screen after login.
+    renderTable([])
+
+    expect(screen.getByTestId('bots-empty')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /create your first bot/i })).toBeInTheDocument()
+  })
+
+  it('signs a profit and a loss so PnL scans without relying on colour', () => {
+    renderTable([
+      bot({ id: 'up', symbol: 'UP/USD', pnl: 12.5 }),
+      bot({ id: 'down', symbol: 'DOWN/USD', pnl: -3.25 }),
+    ])
+
+    expect(screen.getByText('+12.50')).toBeInTheDocument()
+    expect(screen.getByText('-3.25')).toBeInTheDocument()
+  })
+
+  it('shows a flat PnL unsigned', () => {
+    renderTable([bot({ pnl: 0 })])
+
+    expect(screen.getByText('0.00')).toBeInTheDocument()
+  })
+
+  it('renders status as a pill rather than bare text', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <BotTable bots={[bot({ status: 'running' })]} onStart={vi.fn()} onStop={vi.fn()} />
+      </MemoryRouter>,
+    )
+
+    expect(container.querySelector('.status-running')).toBeInTheDocument()
+  })
+})

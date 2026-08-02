@@ -63,16 +63,22 @@ export function Dashboard() {
       <header className="topbar">
         <h1>Trading Console</h1>
         <nav className="button-row">
-          <Link to="/bots/new" className="button-link">
+          <Link to="/bots/new" className="button-link primary">
             New bot
           </Link>
           <button onClick={() => void logout()}>Sign out</button>
         </nav>
       </header>
 
-      {isLoading && <p className="muted">Loading bots…</p>}
+      {isLoading && (
+        <div className="skeleton-stack" data-testid="bots-loading">
+          <div className="skeleton" style={{ height: '2.5rem' }} />
+          <div className="skeleton" style={{ height: '2.5rem' }} />
+          <div className="skeleton" style={{ height: '2.5rem' }} />
+        </div>
+      )}
       {error && (
-        <p role="alert" className="error">
+        <p role="alert" className="state-error">
           Failed to load bots: {String(error)}
         </p>
       )}

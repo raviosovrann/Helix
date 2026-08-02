@@ -114,7 +114,7 @@ describe('BotDetail delete (#163)', () => {
 
   it('asks for confirmation naming the bot before deleting', async () => {
     const { client } = setupWithDelete(bot({ status: 'stopped', symbol: 'DOGE/USD' }))
-    expect(await screen.findByText('stopped')).toBeInTheDocument()
+    expect(await screen.findByText(/^stopped$/i)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /delete/i }))
 
@@ -132,7 +132,7 @@ describe('BotDetail delete (#163)', () => {
 
   it('does not delete when the confirmation is dismissed', async () => {
     const { client } = setupWithDelete(bot({ status: 'stopped' }))
-    expect(await screen.findByText('stopped')).toBeInTheDocument()
+    expect(await screen.findByText(/^stopped$/i)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /delete/i }))
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }))
@@ -142,7 +142,7 @@ describe('BotDetail delete (#163)', () => {
 
   it('disables delete while the bot is running', async () => {
     setupWithDelete(bot({ status: 'running' }))
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
 
     expect(screen.getByRole('button', { name: /delete/i })).toBeDisabled()
   })
@@ -161,7 +161,7 @@ describe('BotDetail delete (#163)', () => {
         .mockRejectedValue(new Error('409 bot b1 is running; stop it before deleting')),
     } as unknown as ApiClient
     renderWith(client, theBot.id)
-    expect(await screen.findByText('stopped')).toBeInTheDocument()
+    expect(await screen.findByText(/^stopped$/i)).toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: /delete/i }))
     await userEvent.click(screen.getByRole('button', { name: /^confirm$/i }))
@@ -206,7 +206,7 @@ describe('BotDetail', () => {
 
   it('does not suggest a restart when the venue simply cannot stream', async () => {
     const { emit } = setup(bot({ status: 'running' }))
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
 
     emit({
       type: 'state',
@@ -228,7 +228,7 @@ describe('BotDetail', () => {
 
   it('still suggests a restart for a transient stream drop', async () => {
     const { emit } = setup(bot({ status: 'running' }))
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
 
     emit({
       type: 'state',
@@ -249,7 +249,7 @@ describe('BotDetail', () => {
 
   it('refetches when the server reports dropped events', async () => {
     const { client, emit } = setup(bot({ status: 'running' }), [trade()])
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
     const before = (client.getBot as unknown as { mock: { calls: unknown[] } }).mock.calls.length
 
     emit({ type: 'overflow', dropped: 42 })
@@ -263,7 +263,7 @@ describe('BotDetail', () => {
 
   it('applies a PnL-only state event without refetching the bot', async () => {
     const { client, emit } = setup(bot({ status: 'running' }))
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
     const before = (client.getBot as unknown as { mock: { calls: unknown[] } }).mock.calls.length
 
     emit({
@@ -287,7 +287,7 @@ describe('BotDetail', () => {
 
   it('shows a position change pushed over the socket', async () => {
     const { emit } = setup(bot({ status: 'running' }))
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
     emit({
       type: 'state',
       bot_id: 'b1',
@@ -305,7 +305,7 @@ describe('BotDetail', () => {
 
   it('surfaces a runtime failure and a degraded stream', async () => {
     const { emit } = setup(bot({ status: 'running' }))
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
 
     emit({
       type: 'state',
@@ -333,12 +333,12 @@ describe('BotDetail', () => {
       degraded_reason: null,
       degraded_permanent: false,
     })
-    expect(await screen.findByText('failed')).toBeInTheDocument()
+    expect(await screen.findByText(/^failed$/i)).toBeInTheDocument()
   })
 
   it('ignores a state event for a different bot', async () => {
     const { emit } = setup(bot({ status: 'running' }))
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
     emit({
       type: 'state',
       bot_id: 'other',
@@ -351,7 +351,7 @@ describe('BotDetail', () => {
       degraded_reason: null,
       degraded_permanent: false,
     })
-    expect(screen.getByText('running')).toBeInTheDocument()
+    expect(screen.getByText(/^running$/i)).toBeInTheDocument()
   })
 
   it('enabling LIVE shows a confirm and only PATCHes after confirming', async () => {

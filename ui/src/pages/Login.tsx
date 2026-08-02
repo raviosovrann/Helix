@@ -53,7 +53,7 @@ export function Login() {
             {error}
           </p>
         )}
-        <button type="submit" disabled={busy}>
+        <button type="submit" className="primary" disabled={busy}>
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>

@@ -225,7 +225,7 @@ export function NewBot() {
               onChange={(e) => setGlobalCap(e.target.value)}
             />
 
-            <h2>{venue} credentials</h2>
+            <h2>{credFields.length === 0 ? 'Credentials' : `${venue} credentials`}</h2>
             {credFields.length === 0 ? (
               <p className="muted" data-testid="no-credentials-needed">
                 None needed. {venue} simulates its fills and never contacts an exchange account, so
@@ -309,8 +309,15 @@ export function NewBot() {
               Next
             </button>
           )}
+          {/* Red is reserved for real money (#164). Creating a dry-run bot is
+              not a destructive act, and colouring it as one teaches the
+              operator to ignore the colour that matters. */}
           {step === 4 && (
-            <button className="danger" onClick={onCreate} disabled={createBot.isPending}>
+            <button
+              className={live ? 'danger' : 'primary'}
+              onClick={onCreate}
+              disabled={createBot.isPending}
+            >
               {createBot.isPending ? 'Creating…' : 'Create bot'}
             </button>
           )}

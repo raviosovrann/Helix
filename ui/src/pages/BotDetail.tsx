@@ -6,6 +6,7 @@ import { describeTrade } from '../tradeEvent'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { DecisionLog } from '../components/DecisionLog'
 import { LiveBadge } from '../components/LiveBadge'
+import { BotStatusPill } from '../components/StatusPill'
 import { PnlSparkline } from '../components/PnlSparkline'
 import { useBotEvents } from '../hooks/useBotEvents'
 import type { BotView } from '../types'
@@ -75,13 +76,19 @@ export function BotDetail() {
   if (isLoading)
     return (
       <main className="page">
-        <p className="muted">Loading…</p>
+        {/* A shaped skeleton rather than the word "Loading", so the page does
+            not visibly reflow once the data lands (#164). */}
+        <div className="skeleton-stack" data-testid="bot-loading">
+          <div className="skeleton" style={{ width: '14rem', height: '1.4rem' }} />
+          <div className="skeleton" style={{ width: '100%', height: '9rem' }} />
+          <div className="skeleton" style={{ width: '100%', height: '9rem' }} />
+        </div>
       </main>
     )
   if (error || !bot) {
     return (
       <main className="page">
-        <p role="alert" className="error">
+        <p role="alert" className="state-error">
           Failed to load bot: {String(error ?? 'not found')}
         </p>
         <Link to="/" className="button-link">
@@ -199,7 +206,9 @@ export function BotDetail() {
             <dt>Quantity</dt>
             <dd>{bot.quantity}</dd>
             <dt>Status</dt>
-            <dd>{bot.status}</dd>
+            <dd>
+              <BotStatusPill bot={bot} />
+            </dd>
             <dt>Position</dt>
             <dd>
               {bot.position && bot.position.side !== 'flat'

@@ -96,8 +96,9 @@ describe('Dashboard', () => {
       degraded_permanent: false,
     })
 
-    expect(await screen.findByText('running')).toBeInTheDocument()
-    expect(screen.getByText('4.50')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
+    // Positive PnL is explicitly signed so a column of numbers scans (#164).
+    expect(screen.getByText('+4.50')).toBeInTheDocument()
     expect(screen.getByText(/long 2 @ 10/)).toBeInTheDocument()
     expect((client.listBots as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBe(
       fetchesBefore,
@@ -106,7 +107,7 @@ describe('Dashboard', () => {
 
   it('shows a runtime failure arriving over the socket', async () => {
     const { emit } = setup([bot({ id: '1', status: 'running' })])
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
     emit({
       type: 'state',
       bot_id: '1',
@@ -119,12 +120,12 @@ describe('Dashboard', () => {
       degraded_reason: null,
       degraded_permanent: false,
     })
-    expect(await screen.findByText('failed')).toBeInTheDocument()
+    expect(await screen.findByText(/^failed$/i)).toBeInTheDocument()
   })
 
   it('flags a degraded bot without changing its status', async () => {
     const { emit } = setup([bot({ id: '1', status: 'running' })])
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
     emit({
       type: 'state',
       bot_id: '1',
@@ -138,12 +139,12 @@ describe('Dashboard', () => {
       degraded_permanent: false,
     })
     expect(await screen.findByText(/no data/i)).toBeInTheDocument()
-    expect(screen.getByText('running')).toBeInTheDocument()
+    expect(screen.getByText(/^running$/i)).toBeInTheDocument()
   })
 
   it('ignores a state event that arrives out of order', async () => {
     const { emit } = setup([bot({ id: '1', status: 'created' })])
-    expect(await screen.findByText('created')).toBeInTheDocument()
+    expect(await screen.findByText(/^created$/i)).toBeInTheDocument()
     const snapshot = {
       type: 'state' as const,
       bot_id: '1',
@@ -155,15 +156,15 @@ describe('Dashboard', () => {
       degraded_permanent: false,
     }
     emit({ ...snapshot, seq: 5, status: 'running' })
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
     // A stale frame must not resurrect the older status.
     emit({ ...snapshot, seq: 4, status: 'starting' })
-    expect(screen.getByText('running')).toBeInTheDocument()
+    expect(screen.getByText(/^running$/i)).toBeInTheDocument()
   })
 
   it('accepts a restarted server sequence after a reconnect', async () => {
     const { emit, reconnect } = setup([bot({ id: '1', status: 'created' })])
-    expect(await screen.findByText('created')).toBeInTheDocument()
+    expect(await screen.findByText(/^created$/i)).toBeInTheDocument()
     const snapshot = {
       type: 'state' as const,
       bot_id: '1',
@@ -175,17 +176,17 @@ describe('Dashboard', () => {
       degraded_permanent: false,
     }
     emit({ ...snapshot, seq: 9, status: 'running' })
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
 
     // The backend restarted: its counter is back at 1 and must not be dropped.
     reconnect()
     emit({ ...snapshot, seq: 1, status: 'stopped' })
-    expect(await screen.findByText('stopped')).toBeInTheDocument()
+    expect(await screen.findByText(/^stopped$/i)).toBeInTheDocument()
   })
 
   it('refetches the table when the server reports dropped events', async () => {
     const { client, emit } = setup([bot({ id: '1', status: 'running' })])
-    expect(await screen.findByText('running')).toBeInTheDocument()
+    expect(await screen.findByText(/^running$/i)).toBeInTheDocument()
     const before = (client.listBots as unknown as { mock: { calls: unknown[] } }).mock.calls.length
 
     emit({ type: 'overflow', dropped: 9 })
