@@ -8,6 +8,7 @@ import type { BotView, WsEvent } from '../types'
 import { AuthProvider } from '../hooks/useAuth'
 import { BotEventsProvider, type BotSocket } from '../hooks/useBotEvents'
 import { Dashboard } from './Dashboard'
+import { ProtectedRoute } from '../components/ProtectedRoute'
 
 function bot(overrides: Partial<BotView> = {}): BotView {
   return {
@@ -224,15 +225,7 @@ describe('Dashboard', () => {
 })
 
 describe('sign out (#164 routing)', () => {
-  it('returns to the landing page, not the login form', async () => {
-    // A deliberate sign-out should show the product, not immediately ask the
-    // operator to sign back in. An *expired* session still routes to /login,
-    // which ProtectedRoute owns.
-    const client = {
-      getSession: vi.fn().mockResolvedValue({ username: 'op', roles: ['operator'] }),
-      listBots: vi.fn().mockResolvedValue([]),
-      logout: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ApiClient
+  function renderWithGuard(client: ApiClient) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={qc}>
@@ -240,7 +233,13 @@ describe('sign out (#164 routing)', () => {
           <BotEventsProvider socketFactory={() => new FakeSocket()}>
             <MemoryRouter initialEntries={['/dashboard']}>
               <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
+                {/* ProtectedRoute must be in the tree. Without it the test
+                    cannot see the redirect that races the sign-out
+                    navigation -- which is exactly how the first version of
+                    this fix passed its test and still failed in the app. */}
+                <Route element={<ProtectedRoute />}>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                </Route>
                 <Route path="/" element={<div>landing page</div>} />
                 <Route path="/login" element={<div>login form</div>} />
               </Routes>
@@ -249,11 +248,33 @@ describe('sign out (#164 routing)', () => {
         </AuthProvider>
       </QueryClientProvider>,
     )
+  }
+
+  it('returns to the landing page, not the login form', async () => {
+    const client = {
+      getSession: vi.fn().mockResolvedValue({ username: 'op', roles: ['operator'] }),
+      listBots: vi.fn().mockResolvedValue([]),
+      logout: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ApiClient
+    renderWithGuard(client)
 
     await userEvent.click(await screen.findByRole('button', { name: /sign out/i }))
 
     expect(await screen.findByText('landing page')).toBeInTheDocument()
     expect(screen.queryByText('login form')).not.toBeInTheDocument()
-    expect(client.logout).toHaveBeenCalled()
+    await waitFor(() => expect(client.logout).toHaveBeenCalled())
+  })
+
+  it('still sends an expired session to the login form', async () => {
+    // The landing page is for leaving deliberately; an expired session wants
+    // the form. ProtectedRoute owns that path and must keep it.
+    const client = {
+      getSession: vi.fn().mockRejectedValue(new Error('expired')),
+      listBots: vi.fn().mockResolvedValue([]),
+      logout: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ApiClient
+    renderWithGuard(client)
+
+    expect(await screen.findByText('login form')).toBeInTheDocument()
   })
 })

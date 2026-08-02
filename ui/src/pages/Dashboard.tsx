@@ -74,12 +74,18 @@ export function Dashboard() {
           <Link to="/bots/new" className="button-link primary">
             New bot
           </Link>
-          {/* Signing out deliberately returns to the landing page. An expired
-              session still goes to /login via ProtectedRoute, because there the
-              operator wants to get back in, not read about the product. */}
+          {/* Leave the protected subtree BEFORE clearing the session. Doing it
+              the other way round lets ProtectedRoute observe `anon` while this
+              route is still mounted and redirect to /login first, so the later
+              navigate('/') never wins the race.
+
+              An expired session still lands on /login through that same
+              redirect, which is correct: there the operator wants to get back
+              in, not read about the product. */}
           <button
             onClick={() => {
-              void logout().then(() => navigate('/'))
+              navigate('/', { replace: true })
+              void logout()
             }}
           >
             Sign out

@@ -950,6 +950,54 @@ class TestCredentialRotation:
         detail = response.json()["detail"]
         assert bot_id in detail, "the operator needs to know which bot blocks it"
 
+    def test_resubmitting_identical_credentials_is_not_a_rotation(
+        self, client: TestClient
+    ) -> None:
+        """Re-sending the same keys must not be refused while a bot runs.
+
+        Creating a second bot on a venue re-submits the credentials the
+        operator already stored. Nothing rotates, so the #137 guard should not
+        fire -- and refusing here blocks the ordinary case of running two bots
+        on one account.
+        """
+        bot_id = self._bot(client)
+        _login(client)
+        client.put(
+            "/api/venues/coinbase/spot/secrets",
+            json={"api_key": "same", "api_secret": "same"},
+            headers=_csrf(client),
+        )
+        client.post(f"/api/bots/{bot_id}/start", headers=_csrf(client))
+
+        response = client.put(
+            "/api/venues/coinbase/spot/secrets",
+            json={"api_key": "same", "api_secret": "same"},
+            headers=_csrf(client),
+        )
+
+        assert response.status_code == 204, response.text
+
+    def test_a_real_rotation_is_still_refused_while_a_bot_runs(
+        self, client: TestClient
+    ) -> None:
+        """The no-op allowance must not weaken the guard it sits in front of."""
+        bot_id = self._bot(client)
+        _login(client)
+        client.put(
+            "/api/venues/coinbase/spot/secrets",
+            json={"api_key": "old", "api_secret": "old"},
+            headers=_csrf(client),
+        )
+        client.post(f"/api/bots/{bot_id}/start", headers=_csrf(client))
+
+        response = client.put(
+            "/api/venues/coinbase/spot/secrets",
+            json={"api_key": "old", "api_secret": "CHANGED"},
+            headers=_csrf(client),
+        )
+
+        assert response.status_code == 409
+
     def test_rotation_succeeds_once_the_bot_is_stopped(self, client: TestClient) -> None:
         """Verify the documented stop -> rotate -> start flow works."""
         bot_id = self._bot(client)

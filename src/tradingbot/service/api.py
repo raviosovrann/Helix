@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import hmac
+import json
 import logging
 import os
 import contextlib
@@ -149,6 +150,40 @@ def _unauthorized() -> HTTPException:
         detail="Not authenticated",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def _same_credentials(
+    secrets: Any, venue: str, market_type: str, submitted: dict
+) -> bool:
+    """Return whether ``submitted`` already matches what is stored.
+
+    Compared as digests of canonical JSON, in constant time, so neither the
+    stored nor the submitted values are held for comparison or leak through
+    timing.
+
+    Args:
+        secrets: The full stored secrets mapping.
+        venue: Venue identifier.
+        market_type: Market type identifier.
+        submitted: Credentials from the request.
+
+    Returns:
+        True when the two sets are identical.
+    """
+    venue_secrets = secrets.get(venue.strip().lower(), {}) if isinstance(secrets, dict) else {}
+    stored = (
+        venue_secrets.get(market_type.strip().lower(), {})
+        if isinstance(venue_secrets, dict)
+        else {}
+    )
+    if not isinstance(stored, dict) or not stored:
+        return False
+
+    def digest(values: dict) -> str:
+        canonical = json.dumps(values, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    return hmac.compare_digest(digest(stored), digest(submitted))
 
 
 def _require_live_capable(venue: str, market_type: str) -> None:
@@ -713,6 +748,14 @@ def create_app(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="no credentials supplied",
             )
+        # Re-submitting the credentials already stored is not a rotation, so
+        # none of what follows applies: nothing changes, no client is stale, and
+        # no bot needs restarting. This is the ordinary path when an operator
+        # creates a second bot on a venue they have already configured, and
+        # refusing it would block running two bots on one account.
+        if _same_credentials(store.load_secrets(), venue, market_type, creds):
+            return
+
         # The venue client is built once when a bot starts, so rotating under a
         # running bot would leave the API advertising credentials that bot is
         # not using — the same half-applied state #109 refuses for config.
@@ -1050,11 +1093,20 @@ def create_app(
                 status_code=status.HTTP_409_CONFLICT, detail=str(exc)
             ) from exc
 
+        def _cleanup() -> str | None:
+            """Archive the trade log and drop the config. Blocking filesystem work."""
+            destination = store.archive_trades(bot_id)
+            store.delete_config(bot_id)
+            return str(destination) if destination is not None else None
+
         archived: str | None = None
         try:
-            destination = store.archive_trades(bot_id)
-            archived = str(destination) if destination is not None else None
-            store.delete_config(bot_id)
+            # Off the event loop: archiving renames every trade segment the bot
+            # ever wrote, which for a long-lived bot is enough filesystem work
+            # to stall the API, its WebSocket fan-out and every other bot's
+            # poll for as long as it takes. Running it inline made a delete feel
+            # like the console had frozen.
+            archived = await asyncio.to_thread(_cleanup)
         except Exception:  # noqa: BLE001 - the bot is already gone from the runtime
             _log.exception("failed to clean up persisted state for bot %s", bot_id)
         _audit(
@@ -1224,8 +1276,16 @@ def _mount_spa(app: FastAPI, dist: Path) -> None:
         asking the server -- and a deployed UI change stays invisible until the
         operator hard-refreshes.
 
-        ``no-cache`` still permits a conditional request, so an unchanged
-        document costs a 304 rather than a full download.
+        ``no-store`` rather than ``no-cache``: the latter is the correct,
+        cheaper answer in theory, but some browsers (Brave and other
+        Chromium forks with aggressive caching) were observed still serving a
+        stale document through it, even after a hard reload. The document is
+        under a kilobyte and the bundle it names is cached immutably, so
+        refusing to store it costs almost nothing and removes the whole class
+        of "the deploy went out but I still see the old UI".
         """
         del full_path
-        return FileResponse(str(index), headers={"Cache-Control": "no-cache"})
+        return FileResponse(
+            str(index),
+            headers={"Cache-Control": "no-store, must-revalidate"},
+        )
