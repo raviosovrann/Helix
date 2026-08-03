@@ -134,6 +134,21 @@ class OrderResult(BaseModel):
     raw: dict
     error: str | None = None
 
+    avg_price: float | None = None
+    """Volume-weighted price the fill happened at, when the venue reports one.
+
+    Typed rather than left in ``raw`` because ``raw`` is venue-specific and the
+    two spellings silently disagreed: the ledger read ccxt's ``average`` while
+    ``PaperVenue`` wrote ``avg_price``, so every paper fill was recorded at the
+    order's own ``price`` — ``None`` on a market order. Nothing raised; the
+    spot position projection simply skips a fill with no price, and the console
+    reported a flat position and zero PnL for as long as you watched it.
+
+    Optional because a live ccxt result is the exchange response passed through
+    verbatim and cannot populate this without a translation step; the ledger
+    still falls back to ``raw["average"]`` for that case.
+    """
+
 
 class Position(BaseModel):
     """Open position reported by an execution venue."""
